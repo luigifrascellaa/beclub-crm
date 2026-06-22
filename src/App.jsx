@@ -1161,7 +1161,7 @@ function ProfilazioneTab({ p, onUpdateProfilo }) {
               <div key={f.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#0a1426",borderRadius:9,padding:"9px 12px",border:"1px solid "+(val!=null?clr+"40":"#11203a")}}>
                 <span style={{fontSize:12,color:val!=null?"#eff6ff":"#5278a8",fontWeight:val!=null?600:400}}>{f.label}</span>
                 <div style={{display:"flex",gap:5}}>
-                  {TV.filter(v=>v!==null).map(v=>{const active=val===v;const vc=TC[v];return(<button key={v} className="togbtn" onClick={()=>toggle(section,f.key)} style={{background:active?vc+"33":"#0d1b33",color:active?vc:"#3b5478",border:"1.5px solid "+(active?vc:"#1e3a5f"),boxShadow:active?"0 0 8px "+vc+"40":"none"}} title={v==="-"?"No":v==="."?"Forse":"Si"}>{TL[v]}</button>);})}
+                  {TV.filter(v=>v!==null).map(v=>{const active=val===v;const vc=TC[v];return(<button key={v} className="togbtn" onClick={()=>{const next=active?null:v;onUpdateProfilo({pleasures:{...pr.pleasures},forza:{...pr.forza},[section]:{...(pr[section]||{}),[key]:next}});}} style={{background:active?vc+"33":"#0d1b33",color:active?vc:"#3b5478",border:"1.5px solid "+(active?vc:"#1e3a5f"),boxShadow:active?"0 0 8px "+vc+"40":"none"}} title={v==="-"?"No":v==="."?"Forse":"Si"}>{TL[v]}</button>);})}
                 </div>
               </div>
             );
