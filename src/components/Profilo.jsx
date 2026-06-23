@@ -21,7 +21,7 @@ async function sbFetch(path, opts = {}) {
 
 const sbGetProfileByRef = (tok, code) => sbFetch("/rest/v1/profiles?referral_code=eq." + code + "&select=*", { _token: tok });
 
-export function ProfiloView({ auth, onUpdateProfile }) {
+export function ProfiloView({ auth, onUpdateProfile, downlineCount }) {
   const p = auth.profile || {};
   const [nome,      setNome]      = useState(p.nome || "");
   const [cognome,   setCognome]   = useState(p.cognome || "");
@@ -114,20 +114,33 @@ export function ProfiloView({ auth, onUpdateProfile }) {
 
       <div style={{ background: "#080f1f", border: "1px solid #1e3a5f", borderRadius: 14, padding: "1.4rem" }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: "#eff6ff", marginBottom: 4 }}>Il tuo sponsor</div>
-        <div style={{ fontSize: 11, color: "#3b5478", marginBottom: 16, lineHeight: 1.6 }}>
-          Inserisci qui l ID del tuo sponsor reale per correggere il collegamento e aggiornare la tua posizione nell albero.
-        </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-          <div style={{ flex: 1 }}>
-            <label style={lbl}>ID sponsor</label>
-            <input value={sponsorId} onChange={e => setSponsorId(e.target.value)} placeholder="es. mario_abc123" onKeyDown={e => e.key === "Enter" && saveSponsor()} />
-          </div>
-          <button onClick={saveSponsor} disabled={savingSponsor || !sponsorId.trim()}
-            style={{ padding: "9px 18px", background: sponsorId.trim() ? "linear-gradient(135deg,#2563eb,#0ea5e9)" : "#0d1b33", color: sponsorId.trim() ? "#fff" : "#3b5478", border: "none", borderRadius: 9, cursor: sponsorId.trim() && !savingSponsor ? "pointer" : "not-allowed", fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 7, opacity: savingSponsor ? 0.7 : 1 }}>
-            {savingSponsor && <span style={{ width: 14, height: 14, border: "2px solid #ffffff44", borderTopColor: "#fff", borderRadius: "50%", display: "inline-block", animation: "spin .7s linear infinite" }} />}
-            Aggiorna
-          </button>
-        </div>
+        {downlineCount > 0 ? (
+          <>
+            <div style={{ fontSize: 11, color: "#3b5478", marginBottom: 12, lineHeight: 1.6 }}>
+              Hai {downlineCount} {downlineCount === 1 ? "membro" : "membri"} nella tua downline. Per spostare il tuo sponsor senza creare problemi all albero contatta chi gestisce il sistema.
+            </div>
+            <div style={{ background: "#f59e0b12", border: "1px solid #f59e0b30", borderRadius: 9, padding: "10px 14px", fontSize: 12, color: "#f59e0b", fontWeight: 600 }}>
+              Cambio sponsor non disponibile — hai gia una struttura attiva
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 11, color: "#3b5478", marginBottom: 16, lineHeight: 1.6 }}>
+              Inserisci qui l ID del tuo sponsor reale per correggere il collegamento e aggiornare la tua posizione nell albero.
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <label style={lbl}>ID sponsor</label>
+                <input value={sponsorId} onChange={e => setSponsorId(e.target.value)} placeholder="es. mario_abc123" onKeyDown={e => e.key === "Enter" && saveSponsor()} />
+              </div>
+              <button onClick={saveSponsor} disabled={savingSponsor || !sponsorId.trim()}
+                style={{ padding: "9px 18px", background: sponsorId.trim() ? "linear-gradient(135deg,#2563eb,#0ea5e9)" : "#0d1b33", color: sponsorId.trim() ? "#fff" : "#3b5478", border: "none", borderRadius: 9, cursor: sponsorId.trim() && !savingSponsor ? "pointer" : "not-allowed", fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 7, opacity: savingSponsor ? 0.7 : 1 }}>
+                {savingSponsor && <span style={{ width: 14, height: 14, border: "2px solid #ffffff44", borderTopColor: "#fff", borderRadius: "50%", display: "inline-block", animation: "spin .7s linear infinite" }} />}
+                Aggiorna
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
