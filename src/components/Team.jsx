@@ -93,7 +93,7 @@ function TreeNode({memberId,memberNome,memberCognome,memberEmail,allMembers,dlPr
   );
 }
 
-export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,positions}){
+export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,positions,onOpenProspect}){
   const[selectedMember,setSelectedMember]=useState(null);
   const[teamFilter,setTeamFilter]=useState("all");
   const[copied,setCopied]=useState(false);
@@ -181,7 +181,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
             :<table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Nome","Conosciuto","Fonte","Fase","Checklist"].map(h=>(<th key={h} style={{textAlign:"left",color:"#3b5478",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px"}}>{h}</th>))}</tr></thead>
               <tbody>{mP.map(p=>(
-                <tr key={p.id} style={{borderBottom:"1px solid #0d1b3355"}}>
+                <tr key={p.id} onClick={()=>onOpenProspect&&onOpenProspect({...p,_ownerName:(selectedMember.nome||selectedMember.email)+" "+(selectedMember.cognome||"")})} style={{borderBottom:"1px solid #0d1b3355",cursor:onOpenProspect?"pointer":"default"}} className="hrow">
                   <td style={{padding:"11px 16px"}}><div style={{display:"flex",alignItems:"center",gap:9}}><Av n={p.nome} c={p.cognome} color={FASE_CLR[p.fase]}/><span style={{color:"#eff6ff",fontWeight:700,fontSize:13}}>{p.nome} {p.cognome}</span></div></td>
                   <td style={{padding:"11px 16px",color:"#5278a8",fontSize:12}}>{fmt(p.conosciutoAt)}</td>
                   <td style={{padding:"11px 16px",color:"#5278a8",fontSize:12}}>{p.fonte}</td>
@@ -195,6 +195,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
                       })}
                     </div>
                   </td>
+                  <td style={{padding:"11px 16px",color:"#1e3a5f",fontSize:16}}>{"\u203a"}</td>
                 </tr>
               ))}</tbody>
             </table>
