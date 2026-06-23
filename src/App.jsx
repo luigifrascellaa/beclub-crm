@@ -82,8 +82,8 @@ const FASI_FUNNEL   = ["INVITO","FUP1","FUP2","PACK","CLOSING","SUB"];
 const FASI_DASH     = ["FUP1","FUP2","PACK","CLOSING","SUB"];
 const FASI_SPECIALI = ["FOLLOW_UP","NON_INT"];
 const FASI          = [...FASI_FUNNEL, ...FASI_SPECIALI];
-const FONTI         = ["Instagram","TikTok","Offline","Referenza"];
-const FONTE_ICO     = { Instagram:"", TikTok:"", Offline:"", Referenza:"" };
+const FONTI         = ["Instagram","TikTok","Offline","Referenza","Lista Nomi"];
+const FONTE_ICO     = { Instagram:"", TikTok:"", Offline:"", Referenza:"", "Lista Nomi":"" };
 
 const FASE_CLR = {
   INVITO:"#8b5cf6", FUP1:"#2563eb", FUP2:"#3b82f6", PACK:"#0ea5e9",
@@ -511,7 +511,7 @@ export default function App() {
       instagram: fields.instagram||"",
       note: fields.note||"",
       profilazione: fields.profilazione||{},
-      fonte: fields.fonte||"Offline",
+      fonte: "Lista Nomi",
       fase: "INVITO",
       conosciutoAt: fields.conosciutoAt||today(),
       followUp: "",
