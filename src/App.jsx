@@ -1046,7 +1046,7 @@ function FormModal({ form, setForm, onSave, onClose, onDelete, isEdit }) {
           </div>
         )}
       </div>
-      <div style={{marginBottom:18}}><label style={lbl}>Note</label><textarea value={form.note||""} onChange={e=>set("note",e.target.value)} style={{height:76,resize:"vertical"}} placeholder="Dove l'ho conosciuto, contesto..." /></div>
+      <div style={{marginBottom:18}}><label style={lbl}>Note</label><textarea value={form.note||""} onChange={e=>set("note",e.target.value)} style={{height:76,resize:"vertical"}} placeholder="Dove lo hai conosciuto, contesto..." /></div>
       <div style={{display:"flex",gap:9,justifyContent:"flex-end",flexWrap:"wrap"}}>
         {onDelete&&<button onClick={onDelete} style={{padding:"9px 15px",background:"#ef444415",color:"#f87171",border:"1px solid #ef444438",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:13}}>Elimina</button>}
         <button onClick={onClose} style={{padding:"9px 15px",background:"#0d1b33",color:"#7da8d8",border:"1px solid #1e3a5f",borderRadius:9,cursor:"pointer",fontWeight:600,fontSize:13}}>Annulla</button>
