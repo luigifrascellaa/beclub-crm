@@ -458,6 +458,7 @@ export default function App() {
   function getOwnerToken() { return auth.token; }
   function openAdd()    { setForm({fase:"INVITO",fonte:"Instagram",conosciutoAt:today()}); setModal("add"); }
   function openDetail(p){ setSel(p); setModal("detail"); }
+  function closeModal() { setModal(null); setSel(null); setForm({}); }
 
   async function handleLogout() {
     try { await sbSignOut(auth.token); } catch(e){}
