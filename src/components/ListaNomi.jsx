@@ -47,7 +47,7 @@ const TV = [null, "-", ".", "+"];
 const TC = { null:"#1e3a5f", "-":"#ef4444", ".":"#f59e0b", "+":"#10b981" };
 const TL = { "-":"\u2013", ".":"\u00b7", "+":"+" };
 
-const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+const genId = () => crypto.randomUUID();
 const today = () => new Date().toISOString().split("T")[0];
 
 function Av({ n, c, size=34 }) {
