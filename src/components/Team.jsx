@@ -42,58 +42,64 @@ function Av({n,c,color,size=34}){
   );
 }
 
-function TreeNode({memberId,memberNome,memberCognome,memberEmail,allMembers,dlProspects,positions,onSelect,depth}){
+function TreeNode({memberId,memberNome,memberCognome,memberEmail,allMembers,dlProspects,positions,onSelect,depth,selectedForPlacement,onPlaceHere}){
   const children=allMembers.filter(m=>m.positioned_under===memberId);
   function getPos(mId,upId){const p=positions.find(p=>p.member_id===mId&&p.upline_id===upId);return p?.team||null;}
   const sin=children.filter(m=>getPos(m.id,memberId)==="sinistra");
   const de=children.filter(m=>getPos(m.id,memberId)==="destra");
-  const no=children.filter(m=>!getPos(m.id,memberId));
   const mP=dlProspects.filter(p=>p._userId===memberId);
   const ms=teamStats(mP);
   const isRoot=depth===0;
+  const canPlace=!!selectedForPlacement;
+
+  // Slot vuoto cliccabile
+  function EmptySlot({team}){
+    if(!canPlace)return(
+      <div style={{width:120,height:44,border:"2px dashed #1e3a5f",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <span style={{fontSize:10,color:"#2a4060"}}>vuoto</span>
+      </div>
+    );
+    const color=team==="sinistra"?"#2563eb":"#10b981";
+    return(
+      <div onClick={()=>onPlaceHere&&onPlaceHere(memberId,team)}
+        style={{width:120,height:44,border:"2px dashed "+color,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",background:color+"12",transition:"all .2s"}}>
+        <span style={{fontSize:11,color,fontWeight:700}}>+ Posiziona qui</span>
+      </div>
+    );
+  }
+
   return(
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:160}}>
-      <div onClick={()=>!isRoot&&onSelect(allMembers.find(m=>m.id===memberId))}
+      <div onClick={()=>!isRoot&&onSelect&&onSelect(allMembers.find(m=>m.id===memberId))}
         style={{background:isRoot?"linear-gradient(135deg,#2563eb,#0ea5e9)":"#0d1b33",border:"2px solid "+(isRoot?"#2563eb":"#1e3a5f"),borderRadius:12,padding:"10px 16px",textAlign:"center",cursor:isRoot?"default":"pointer",minWidth:130,boxShadow:isRoot?"0 0 20px #2563eb40":"none",marginBottom:4}}>
         <div style={{fontWeight:800,fontSize:12,color:isRoot?"#fff":"#eff6ff"}}>{memberNome||memberEmail} {memberCognome||""}</div>
         {!isRoot&&<div style={{fontSize:10,color:"#5278a8",marginTop:2}}>{ms.sub} iscr {"\u00b7"} {ms.bv} BV</div>}
       </div>
-      {(sin.length>0||de.length>0||no.length>0)&&(
-        <>
-          <div style={{width:2,height:16,background:"#1e3a5f"}}/>
-          <div style={{display:"flex",gap:0,alignItems:"flex-start"}}>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:160}}>
-              <div style={{fontSize:9,fontWeight:800,color:"#2563eb",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>{"\u2190"} Sinistra</div>
-              {sin.length===0
-                ?<div style={{width:120,height:44,border:"2px dashed #1e3a5f",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:10,color:"#2a4060"}}>vuota</span></div>
-                :sin.map(child=><TreeNode key={child.id} memberId={child.id} memberNome={child.nome} memberCognome={child.cognome} memberEmail={child.email} allMembers={allMembers} dlProspects={dlProspects} positions={positions} onSelect={onSelect} depth={depth+1}/>)
-              }
-            </div>
-            <div style={{width:2,minHeight:60,background:"#1e3a5f",margin:"0 8px"}}/>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:160}}>
-              <div style={{fontSize:9,fontWeight:800,color:"#10b981",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Destra {"\u2192"}</div>
-              {de.length===0
-                ?<div style={{width:120,height:44,border:"2px dashed #1e3a5f",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:10,color:"#2a4060"}}>vuota</span></div>
-                :de.map(child=><TreeNode key={child.id} memberId={child.id} memberNome={child.nome} memberCognome={child.cognome} memberEmail={child.email} allMembers={allMembers} dlProspects={dlProspects} positions={positions} onSelect={onSelect} depth={depth+1}/>)
-              }
-            </div>
-            {no.length>0&&(
-              <>
-                <div style={{width:2,minHeight:60,background:"#1e3a5f",margin:"0 8px"}}/>
-                <div style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:140}}>
-                  <div style={{fontSize:9,fontWeight:800,color:"#6b7280",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Non assegnati</div>
-                  {no.map(child=><TreeNode key={child.id} memberId={child.id} memberNome={child.nome} memberCognome={child.cognome} memberEmail={child.email} allMembers={allMembers} dlProspects={dlProspects} positions={positions} onSelect={onSelect} depth={depth+1}/>)}
-                </div>
-              </>
-            )}
-          </div>
-        </>
-      )}
+      <div style={{width:2,height:16,background:"#1e3a5f"}}/>
+      <div style={{display:"flex",gap:0,alignItems:"flex-start"}}>
+        {/* SINISTRA */}
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:160}}>
+          <div style={{fontSize:9,fontWeight:800,color:"#2563eb",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>{"\u2190"} Sinistra</div>
+          {sin.length===0
+            ?<EmptySlot team="sinistra"/>
+            :sin.map(child=><TreeNode key={child.id} memberId={child.id} memberNome={child.nome} memberCognome={child.cognome} memberEmail={child.email} allMembers={allMembers} dlProspects={dlProspects} positions={positions} onSelect={onSelect} depth={depth+1} selectedForPlacement={selectedForPlacement} onPlaceHere={onPlaceHere}/>)
+          }
+        </div>
+        <div style={{width:2,minHeight:60,background:"#1e3a5f",margin:"0 8px"}}/>
+        {/* DESTRA */}
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:160}}>
+          <div style={{fontSize:9,fontWeight:800,color:"#10b981",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Destra {"\u2192"}</div>
+          {de.length===0
+            ?<EmptySlot team="destra"/>
+            :de.map(child=><TreeNode key={child.id} memberId={child.id} memberNome={child.nome} memberCognome={child.cognome} memberEmail={child.email} allMembers={allMembers} dlProspects={dlProspects} positions={positions} onSelect={onSelect} depth={depth+1} selectedForPlacement={selectedForPlacement} onPlaceHere={onPlaceHere}/>)
+          }
+        </div>
+      </div>
     </div>
   );
 }
 
-export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,positions,onOpenProspect}){
+export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,positions,onOpenProspect,onPositionInTree}){
   const[selectedMember,setSelectedMember]=useState(null);
   const[teamFilter,setTeamFilter]=useState("all");
   const[copied,setCopied]=useState(false);
@@ -104,6 +110,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
   const[addPositionedUnder,setAddPositionedUnder]=useState("");
   const[addTeam,setAddTeam]=useState("");
   const[activeTeamTab,setActiveTeamTab]=useState("dashboard");
+  const[selectedForPlacement,setSelectedForPlacement]=useState(null); // membro selezionato da piazzare
 
   const referralLink=auth?.profile?.referral_code?window.location.origin+"?ref="+auth.profile.referral_code:null;
 
@@ -134,6 +141,10 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
   const sinistra=downline.filter(m=>getTeamForMe(m)==="sinistra");
   const destra=downline.filter(m=>getTeamForMe(m)==="destra");
   const noTeam=downline.filter(m=>!getTeamForMe(m));
+  // Membri in attesa di posizionamento (hanno squadra ma positioned_under è null)
+  const inAttesa=downline.filter(m=>!m.positioned_under&&getTeamForMe(m));
+  // Membri posizionati nell'albero
+  const posizionati=downline.filter(m=>m.positioned_under);
   const filteredMembers=teamFilter==="all"?downline:teamFilter==="sinistra"?sinistra:teamFilter==="destra"?destra:noTeam;
   function getMemberProspects(memberId){return dlByCiclo.filter(p=>p._userId===memberId);}
   function squadraStats(members){return teamStats(members.flatMap(m=>getMemberProspects(m.id)));}
@@ -284,12 +295,54 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
       </div>
 
       {activeTeamTab==="albero"&&(
-        <div style={{background:"#080f1f",border:"1px solid #11203a",borderRadius:14,padding:"1.4rem",marginBottom:16,overflowX:"auto"}}>
-          <div style={{fontSize:13,fontWeight:800,color:"#eff6ff",marginBottom:20}}>Albero genealogico</div>
-          {downline.length===0
-            ?<div style={{textAlign:"center",padding:"3rem",color:"#1e3a5f"}}>Nessun membro ancora</div>
-            :<TreeNode memberId={auth.userId} memberNome={auth.profile?.nome||""} memberCognome={auth.profile?.cognome||""} memberEmail={auth.email} allMembers={downline} dlProspects={dlProspects} positions={positions} onSelect={setSelectedMember} depth={0}/>
-          }
+        <div style={{marginBottom:16}}>
+          {/* Zona in attesa */}
+          {inAttesa.length>0&&(
+            <div style={{background:"#080f1f",border:"1px solid #f59e0b30",borderRadius:14,padding:"1.2rem",marginBottom:12}}>
+              <div style={{fontSize:12,fontWeight:800,color:"#f59e0b",marginBottom:10}}>
+                In attesa di posizionamento — seleziona una persona poi clicca lo slot nell albero
+              </div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {inAttesa.map(m=>{
+                  const team=getTeamForMe(m);
+                  const color=team==="sinistra"?"#2563eb":"#10b981";
+                  const isSelected=selectedForPlacement?.id===m.id;
+                  return(
+                    <button key={m.id} onClick={()=>setSelectedForPlacement(isSelected?null:m)}
+                      style={{padding:"8px 14px",background:isSelected?color+"30":"#0a1426",border:"2px solid "+(isSelected?color:"#1e3a5f"),borderRadius:9,cursor:"pointer",color:isSelected?color:"#eff6ff",fontWeight:700,fontSize:12,transition:"all .2s"}}>
+                      {m.nome||m.email} {m.cognome||""} <span style={{fontSize:10,color:color,marginLeft:4}}>{team}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedForPlacement&&<div style={{fontSize:11,color:"#f59e0b",marginTop:8}}>Ora clicca su uno slot vuoto nell albero per posizionare {selectedForPlacement.nome||selectedForPlacement.email}</div>}
+            </div>
+          )}
+
+          {/* Albero */}
+          <div style={{background:"#080f1f",border:"1px solid #11203a",borderRadius:14,padding:"1.4rem",overflowX:"auto"}}>
+            <div style={{fontSize:13,fontWeight:800,color:"#eff6ff",marginBottom:20}}>Albero genealogico</div>
+            {posizionati.length===0&&inAttesa.length===0
+              ?<div style={{textAlign:"center",padding:"3rem",color:"#1e3a5f"}}>Nessun membro ancora</div>
+              :<TreeNode
+                memberId={auth.userId}
+                memberNome={auth.profile?.nome||""}
+                memberCognome={auth.profile?.cognome||""}
+                memberEmail={auth.email}
+                allMembers={posizionati}
+                dlProspects={dlProspects}
+                positions={positions}
+                onSelect={setSelectedMember}
+                depth={0}
+                selectedForPlacement={selectedForPlacement}
+                onPlaceHere={async(nodeId,team)=>{
+                  if(!selectedForPlacement)return;
+                  await onPositionInTree(selectedForPlacement.id,nodeId,team);
+                  setSelectedForPlacement(null);
+                }}
+              />
+            }
+          </div>
         </div>
       )}
 

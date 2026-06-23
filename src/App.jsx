@@ -576,12 +576,43 @@ export default function App() {
 
   async function assignTeam(memberId, team) {
     try {
+      // Salva la squadra relativa a me
       await sbSetPosition(auth.token, auth.userId, memberId, team);
       setPositions(p => {
         const filtered = p.filter(x => !(x.upline_id===auth.userId && x.member_id===memberId));
         return [...filtered, { upline_id:auth.userId, member_id:memberId, team }];
       });
-      showToast("Squadra aggiornata ");
+
+      // Controlla se ho già un diretto in quella leg
+      const allProfiles = await sbGetAllProfiles(auth.token);
+      const myDirects = (allProfiles||[]).filter(p => p.positioned_under === auth.userId);
+      const myPos = (await sbGetPositions(auth.token))||[];
+      const legOccupied = myPos.some(p => p.upline_id===auth.userId && p.member_id!==memberId && p.team===team && myDirects.some(d=>d.id===p.member_id && d.positioned_under===auth.userId));
+
+      if (!legOccupied) {
+        // Slot libero — posiziona direttamente sotto di me
+        await sbPositionMember(auth.token, memberId, auth.userId);
+        setDownline(d=>d.map(m=>m.id===memberId?{...m,positioned_under:auth.userId}:m));
+        showToast("Posizionato nella leg "+team);
+      } else {
+        // Slot occupato — metti in attesa (positioned_under = null)
+        await sbPositionMember(auth.token, memberId, null);
+        setDownline(d=>d.map(m=>m.id===memberId?{...m,positioned_under:null}:m));
+        showToast("In attesa di posizionamento — selezionalo nell albero");
+      }
+    } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
+  }
+
+  async function positionInTree(memberId, targetNodeId, team) {
+    try {
+      await sbPositionMember(auth.token, memberId, targetNodeId);
+      if (team) await sbSetPosition(auth.token, targetNodeId, memberId, team);
+      setDownline(d=>d.map(m=>m.id===memberId?{...m,positioned_under:targetNodeId}:m));
+      if (team) setPositions(p=>{
+        const filtered=p.filter(x=>!(x.member_id===memberId&&x.upline_id===targetNodeId));
+        return [...filtered,{upline_id:targetNodeId,member_id:memberId,team}];
+      });
+      showToast("Posizionato nell albero");
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
   }
 
@@ -663,7 +694,7 @@ export default function App() {
         {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} />}
         {view==="lista" && <Lista prospects={listaData} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={setListaMode} hasTeam={dlProspects.length>0} />}
         {view==="stats"   && <Statistiche data={data} dlProspects={dlProspects} />}
-        {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} />}
+        {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} />}
         {view==="profilo" && <ProfiloView auth={auth} onUpdateProfile={updateProfile} downline={downline} showToast={showToast} />}
       </main>
 
