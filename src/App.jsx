@@ -1,3 +1,4 @@
+// BE Club CRM v2
 import { useState, useEffect } from "react";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell, PieChart, Pie } from "recharts";
 import { TeamView } from "./components/Team";
