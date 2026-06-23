@@ -106,7 +106,7 @@ const PROFILO_TOTAL = PLEASURES.length + FORZA.length;
 
 const TV = [null, "-", ".", "+"];
 const TC = { null:"#1e3a5f", "-":"#ef4444", ".":"#f59e0b", "+":"#10b981" };
-const TL = { "-":"–", ".":"·", "+":"+" };
+const TL = { "-":"\u2013", ".":"\u00b7", "+":"+" };
 function nextToggle(v) { const i = TV.indexOf(v); return TV[(i+1) % TV.length]; }
 
 function profiloBadge(p) {
@@ -302,7 +302,7 @@ function AuthScreen({ onAuth }) {
           <div style={{width:40,height:40,borderRadius:12,background:"linear-gradient(135deg,#2563eb,#0ea5e9)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,boxShadow:"0 0 20px #2563eb50"}}>◆</div>
           <div>
             <div style={{fontWeight:900,fontSize:17,color:"#eff6ff",lineHeight:1.1}}>BE Club CRM</div>
-            <div style={{fontSize:11,color:"#3b5478",marginTop:2}}>Pipeline · Profilazione · Team</div>
+            <div style={{fontSize:11,color:"#3b5478",marginTop:2}}>Pipeline {"\u00b7"} Profilazione {"\u00b7"} Team</div>
           </div>
         </div>
         <div style={{display:"flex",background:"#0a1426",borderRadius:10,padding:4,marginBottom:24,border:"1px solid #11203a"}}>
@@ -379,7 +379,8 @@ export default function App() {
   const [saving, setSaving]       = useState(false);
   const [downline, setDownline]   = useState([]);
   const [dlProspects, setDlProspects] = useState([]);
-  const [positions, setPositions] = useState([]); // {upline_id, member_id, team}
+  const [positions, setPositions] = useState([]);
+  const [dashMode, setDashMode]   = useState("personale");
 
   useEffect(()=>{
     const el=document.createElement("style");
@@ -510,7 +511,25 @@ export default function App() {
     } catch(e) { showToast("Errore salvataggio","#ef4444"); }
   }
 
-  async function assignTeam(memberId, team) {
+  async function updateProfile(fields) {
+    try {
+      await sbUpdateProfile(auth.token, auth.userId, fields);
+      setAuth(a => ({ ...a, profile: { ...a.profile, ...fields } }));
+      showToast("Profilo aggiornato ✅");
+      // Se cambia positioned_under ricarica la downline
+      if (fields.positioned_under !== undefined) {
+        const allProfiles = await sbGetAllProfiles(auth.token);
+        const all = allProfiles || [];
+        function buildFull(pid) {
+          const res = [];
+          function collect(id) { all.filter(p=>p.positioned_under===id).forEach(c=>{res.push(c);collect(c.id);}); }
+          collect(pid); return res;
+        }
+        const mine = buildFull(auth.userId);
+        setDownline(mine);
+      }
+    } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
+  }
     try {
       await sbSetPosition(auth.token, auth.userId, memberId, team);
       setPositions(p => {
@@ -551,8 +570,6 @@ export default function App() {
     } catch(e) { showToast("Errore export","#ef4444"); }
   }
 
-  const [dashMode, setDashMode] = useState("personale"); // "personale" | "team"
-
   // Dati da usare nella dashboard in base alla modalità
   const dashData = dashMode === "team" ? [...data, ...dlProspects] : data;
 
@@ -592,8 +609,9 @@ export default function App() {
       <main style={{flex:1,overflowY:"auto",height:"100vh"}}>
         {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} />}
         {view==="lista" && <Lista prospects={listaData} total={data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} onOpen={openDetail} onAdd={openAdd} />}
-        {view==="stats" && <Statistiche data={data} dlProspects={dlProspects} />}
-        {view==="team"  && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} />}
+        {view==="stats"   && <Statistiche data={data} dlProspects={dlProspects} />}
+        {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} />}
+        {view==="profilo" && <ProfiloView auth={auth} onUpdateProfile={updateProfile} downline={downline} showToast={showToast} />}
       </main>
 
       {modal && (
@@ -613,10 +631,11 @@ export default function App() {
 // ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout, downlineCount }) {
   const navs = [
-    { id:"dash",  icon:"▦", label:"Dashboard" },
-    { id:"lista", icon:"☰", label:"Prospect", badge:data.length },
-    { id:"stats", icon:"◪", label:"Statistiche" },
-    { id:"team",  icon:"◈", label:"Team", badge:downlineCount||0 },
+    { id:"dash",    icon:"▦", label:"Dashboard" },
+    { id:"lista",   icon:"☰", label:"Prospect", badge:data.length },
+    { id:"stats",   icon:"◪", label:"Statistiche" },
+    { id:"team",    icon:"◈", label:"Team", badge:downlineCount||0 },
+    { id:"profilo", icon:"◉", label:"Profilo" },
   ];
   return (
     <aside style={{width:222,minWidth:222,background:"#080f1f",borderRight:"1px solid #11203a",padding:"1.5rem .9rem",display:"flex",flexDirection:"column",gap:4,height:"100vh",overflowY:"auto"}}>
@@ -831,7 +850,7 @@ function TeamView({ auth, downline, dlProspects, onAssignTeam, onAddManual, posi
       <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:"1.5rem",gap:12,flexWrap:"wrap"}}>
         <div>
           <div style={{fontSize:11,fontWeight:700,color:"#2563eb",textTransform:"uppercase",letterSpacing:1.4,marginBottom:4}}>
-            {teamCiclo==="ALL"?"Tutti i cicli":"Ciclo "+teamCiclo+(teamCiclo===CICLO_CORRENTE?" · in corso":"")}
+            {teamCiclo==="ALL"?"Tutti i cicli":"Ciclo "+teamCiclo+(teamCiclo===CICLO_CORRENTE?" \u00b7 in corso":"")}
           </div>
           <h1 style={{fontWeight:900,fontSize:26,color:"#eff6ff",letterSpacing:-0.8,lineHeight:1}}>Team</h1>
           <p style={{color:"#3b5478",fontSize:12,marginTop:4}}>{downline.length} membri nella tua downline</p>
@@ -901,7 +920,7 @@ function TeamView({ auth, downline, dlProspects, onAssignTeam, onAddManual, posi
             </div>
             <div style={{display:"flex",gap:9,justifyContent:"flex-end"}}>
               <button onClick={()=>{setShowAddModal(false);setAddCode("");}} style={{padding:"9px 15px",background:"#0d1b33",color:"#7da8d8",border:"1px solid #1e3a5f",borderRadius:9,cursor:"pointer",fontWeight:600,fontSize:13}}>Annulla</button>
-              <button onClick={handleAddManual} disabled={addLoading} style={{padding:"9px 20px",background:"linear-gradient(135deg,#2563eb,#0ea5e9)",color:"#fff",border:"none",borderRadius:9,cursor:addLoading?"not-allowed":"pointer",fontWeight:800,fontSize:13,display:"flex",alignItems:"center",gap:7,opacity:addLoading?.7:1}}>
+              <button onClick={handleAddManual} disabled={addLoading} style={{padding:"9px 20px",background:"linear-gradient(135deg,#2563eb,#0ea5e9)",color:"#fff",border:"none",borderRadius:9,cursor:addLoading?"not-allowed":"pointer",fontWeight:800,fontSize:13,display:"flex",alignItems:"center",gap:7,opacity:addLoading?0.7:1}}>
                 {addLoading&&<span className="spinner"/>}Aggiungi
               </button>
             </div>
@@ -1169,7 +1188,7 @@ function TreeNode({ memberId, memberNome, memberCognome, memberEmail, allMembers
       <div onClick={()=>!isRoot&&onSelect(allMembers.find(m=>m.id===memberId))}
         style={{background:isRoot?"linear-gradient(135deg,#2563eb,#0ea5e9)":"#0d1b33",border:"2px solid "+(isRoot?"#2563eb":"#1e3a5f"),borderRadius:12,padding:"10px 16px",textAlign:"center",cursor:isRoot?"default":"pointer",minWidth:130,boxShadow:isRoot?"0 0 20px #2563eb40":"none",marginBottom:4}}>
         <div style={{fontWeight:800,fontSize:12,color:isRoot?"#fff":"#eff6ff"}}>{memberNome||memberEmail} {memberCognome||""}</div>
-        {!isRoot && <div style={{fontSize:10,color:"#5278a8",marginTop:2}}>{ms.sub} iscr · {ms.bv} BV</div>}
+        {!isRoot && <div style={{fontSize:10,color:"#5278a8",marginTop:2}}>{ms.sub} iscr {"\u00b7"} {ms.bv} BV</div>}
       </div>
 
       {/* Figli */}
@@ -1220,6 +1239,116 @@ function TreeNode({ memberId, memberNome, memberCognome, memberEmail, allMembers
   );
 }
 
+// ─── PROFILO VIEW ─────────────────────────────────────────────────────────────
+function ProfiloView({ auth, onUpdateProfile, downline, showToast }) {
+  const p = auth.profile || {};
+  const [nome,     setNome]     = useState(p.nome||"");
+  const [cognome,  setCognome]  = useState(p.cognome||"");
+  const [citta,    setCitta]    = useState(p.citta||"");
+  const [telefono, setTelefono] = useState(p.telefono||"");
+  const [instagram,setInstagram]= useState(p.instagram||"");
+  const [sponsorId,setSponsorId]= useState("");
+  const [saving,   setSaving]   = useState(false);
+  const [savingSponsor, setSavingSponsor] = useState(false);
+
+  const lbl = { fontSize:11, fontWeight:700, color:"#3b5478", textTransform:"uppercase", letterSpacing:.8, marginBottom:5, display:"block" };
+  const box = { background:"#0a1426", border:"1px solid #11203a", borderRadius:10, padding:"11px 13px" };
+
+  async function saveProfile() {
+    setSaving(true);
+    await onUpdateProfile({ nome:nome.trim(), cognome:cognome.trim(), citta:citta.trim(), telefono:telefono.trim()||null, instagram:instagram.trim()||null });
+    setSaving(false);
+  }
+
+  async function saveSponsor() {
+    if (!sponsorId.trim()) return;
+    setSavingSponsor(true);
+    try {
+      // Trova il profilo con questo referral code
+      const profiles = await sbGetProfileByRef(auth.token, sponsorId.trim().toLowerCase());
+      if (!profiles || profiles.length === 0) { showToast("Nessun account trovato con questo ID ❌","#ef4444"); setSavingSponsor(false); return; }
+      const sponsor = profiles[0];
+      if (sponsor.id === auth.userId) { showToast("Non puoi essere sponsor di te stesso ❌","#ef4444"); setSavingSponsor(false); return; }
+      // Aggiorna upline_id e positioned_under
+      await onUpdateProfile({ upline_id: sponsor.id, positioned_under: sponsor.id });
+      setSponsorId("");
+      showToast("Sponsor aggiornato ✅ — ora sei nella downline di "+( sponsor.nome||sponsor.email));
+    } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
+    setSavingSponsor(false);
+  }
+
+  return (
+    <div style={{padding:"2rem 2.2rem",maxWidth:680,margin:"0 auto"}}>
+      <h1 style={{fontWeight:900,fontSize:26,color:"#eff6ff",letterSpacing:-0.8,marginBottom:4}}>Il tuo profilo</h1>
+      <p style={{color:"#3b5478",fontSize:12,marginBottom:24}}>Le tue informazioni personali visibili nel team</p>
+
+      {/* Avatar + ID */}
+      <div style={{display:"flex",alignItems:"center",gap:18,marginBottom:28,background:"#080f1f",border:"1px solid #11203a",borderRadius:14,padding:"1.4rem"}}>
+        <div style={{width:64,height:64,borderRadius:"50%",background:"linear-gradient(135deg,#2563eb,#0ea5e9)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:900,color:"#fff",flexShrink:0,boxShadow:"0 0 20px #2563eb40"}}>
+          {(nome||auth.email||"?")[0].toUpperCase()}
+        </div>
+        <div>
+          <div style={{fontWeight:900,fontSize:18,color:"#eff6ff"}}>{nome||"—"} {cognome||""}</div>
+          <div style={{fontSize:12,color:"#5278a8",marginTop:3}}>{auth.email}</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
+            <span style={{fontSize:10,color:"#3b5478"}}>Il tuo ID:</span>
+            <span style={{background:"#2563eb20",color:"#60a5fa",borderRadius:6,padding:"2px 10px",fontSize:12,fontWeight:800,fontFamily:"monospace"}}>{p.referral_code||"..."}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Form dati personali */}
+      <div style={{background:"#080f1f",border:"1px solid #11203a",borderRadius:14,padding:"1.4rem",marginBottom:16}}>
+        <div style={{fontSize:13,fontWeight:800,color:"#eff6ff",marginBottom:16}}>Dati personali</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+          <div><label style={lbl}>Nome</label><input value={nome} onChange={e=>setNome(e.target.value)} placeholder="Luigi" /></div>
+          <div><label style={lbl}>Cognome</label><input value={cognome} onChange={e=>setCognome(e.target.value)} placeholder="Rossi" /></div>
+          <div style={{gridColumn:"1/-1"}}><label style={lbl}>Citta</label><input value={citta} onChange={e=>setCitta(e.target.value)} placeholder="Milano" /></div>
+          <div><label style={lbl}>Telefono</label><input value={telefono} onChange={e=>setTelefono(e.target.value)} placeholder="+39 333 000 0000" /></div>
+          <div><label style={lbl}>Instagram</label><input value={instagram} onChange={e=>setInstagram(e.target.value)} placeholder="@username" /></div>
+          <div style={{gridColumn:"1/-1"}}>
+            <label style={lbl}>Email</label>
+            <input value={auth.email} disabled style={{opacity:.5,cursor:"not-allowed"}} />
+            <div style={{fontSize:10,color:"#2a4060",marginTop:4}}>Email non modificabile</div>
+          </div>
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end"}}>
+          <button onClick={saveProfile} disabled={saving}
+            style={{padding:"9px 22px",background:"linear-gradient(135deg,#2563eb,#0ea5e9)",color:"#fff",border:"none",borderRadius:9,cursor:saving?"not-allowed":"pointer",fontWeight:800,fontSize:13,display:"flex",alignItems:"center",gap:7,opacity:saving?0.7:1}}>
+            {saving&&<span className="spinner"/>}Salva
+          </button>
+        </div>
+      </div>
+
+      {/* Sponsor */}
+      <div style={{background:"#080f1f",border:"1px solid #1e3a5f",borderRadius:14,padding:"1.4rem"}}>
+        <div style={{fontSize:13,fontWeight:800,color:"#eff6ff",marginBottom:4}}>Il tuo sponsor</div>
+        <div style={{fontSize:11,color:"#3b5478",marginBottom:16,lineHeight:1.6}}>
+          Se hai usato il referral sbagliato o vuoi correggere il collegamento, inserisci qui l ID del tuo sponsor reale. Questo aggiornerai la tua posizione nell albero.
+        </div>
+        {p.upline_id && (
+          <div style={{...box,marginBottom:12}}>
+            <div style={{fontSize:10,color:"#3b5478",marginBottom:4,textTransform:"uppercase",letterSpacing:.8,fontWeight:700}}>Sponsor attuale</div>
+            <div style={{color:"#eff6ff",fontWeight:700,fontSize:13}}>
+              {downline.find(m=>m.id===p.upline_id)?.nome||"—"} {downline.find(m=>m.id===p.upline_id)?.cognome||""}
+            </div>
+          </div>
+        )}
+        <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
+          <div style={{flex:1}}>
+            <label style={lbl}>Nuovo ID sponsor</label>
+            <input value={sponsorId} onChange={e=>setSponsorId(e.target.value)} placeholder="es. mario_abc123" onKeyDown={e=>e.key==="Enter"&&saveSponsor()} />
+          </div>
+          <button onClick={saveSponsor} disabled={savingSponsor||!sponsorId.trim()}
+            style={{padding:"9px 18px",background:sponsorId.trim()?"linear-gradient(135deg,#2563eb,#0ea5e9)":"#0d1b33",color:sponsorId.trim()?"#fff":"#3b5478",border:"none",borderRadius:9,cursor:sponsorId.trim()&&!savingSponsor?"pointer":"not-allowed",fontWeight:800,fontSize:13,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:7}}>
+            {savingSponsor&&<span className="spinner"/>}Aggiorna
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, totSub, totConv, totAll, funnelCounts, funnelMax, urgenti, dashCiclo, setDashCiclo, onOpen, dashMode, setDashMode, hasTeam }) {
   const cc = v => v>=20?"#10b981":v>=10?"#0ea5e9":"#f59e0b";
@@ -1234,7 +1363,7 @@ function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, totSub, totConv, totAll, f
     <div style={{padding:"2rem 2.2rem",maxWidth:1280,margin:"0 auto"}}>
       <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:"1.5rem",gap:12,flexWrap:"wrap"}}>
         <div>
-          <div style={{fontSize:11,fontWeight:700,color:"#2563eb",textTransform:"uppercase",letterSpacing:1.4,marginBottom:4}}>Ciclo {dashCiclo}{dashCiclo===CICLO_CORRENTE?" · in corso":""}</div>
+          <div style={{fontSize:11,fontWeight:700,color:"#2563eb",textTransform:"uppercase",letterSpacing:1.4,marginBottom:4}}>Ciclo {dashCiclo}{dashCiclo===CICLO_CORRENTE?" \u00b7 in corso":""}</div>
           <h1 style={{fontWeight:900,fontSize:26,color:"#eff6ff",letterSpacing:-0.8,lineHeight:1}}>Dashboard</h1>
           <p style={{color:"#3b5478",fontSize:12,marginTop:4}}>{cicloLabel(dashCiclo)}</p>
         </div>
@@ -1561,7 +1690,7 @@ function ProfilazioneTab({ p, onUpdateProfilo }) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:10}}>
           {JUNG.map(j=>{const active=sj===j.key;return(<button key={j.key} onClick={()=>selectJung(j.key)} style={{background:active?j.bg:"#0a1426",border:"2px solid "+(active?j.border:"#1e3a5f"),borderRadius:12,padding:"14px 14px 12px",cursor:"pointer",textAlign:"left",transition:"all .2s",boxShadow:active?"0 0 18px "+j.glow:"none",position:"relative",overflow:"hidden"}}>{active&&<div style={{position:"absolute",top:8,right:10,width:18,height:18,borderRadius:"50%",background:"#ffffff33",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#fff"}}>✓</div>}<div style={{fontWeight:900,fontSize:14,color:active?"#fff":j.border,marginBottom:3}}>{j.label}</div><div style={{fontSize:10,fontWeight:700,color:active?"rgba(255,255,255,.85)":"#5278a8",marginBottom:5}}>{j.sub}</div><div style={{fontSize:10,color:active?"rgba(255,255,255,.65)":"#3b5478",lineHeight:1.45}}>{j.desc}</div></button>);})}
         </div>
-        {jd&&<div style={{background:jd.border+"15",border:"1px solid "+jd.border+"35",borderRadius:10,padding:"10px 13px",display:"flex",alignItems:"center",gap:10}}><div style={{width:10,height:10,borderRadius:"50%",background:jd.border,flexShrink:0,boxShadow:"0 0 8px "+jd.border}}/><div><span style={{fontSize:11,fontWeight:800,color:jd.border}}>{jd.label}</span><span style={{fontSize:11,color:"#5278a8",marginLeft:6}}>· {jd.sub}</span></div></div>}
+        {jd&&<div style={{background:jd.border+"15",border:"1px solid "+jd.border+"35",borderRadius:10,padding:"10px 13px",display:"flex",alignItems:"center",gap:10}}><div style={{width:10,height:10,borderRadius:"50%",background:jd.border,flexShrink:0,boxShadow:"0 0 8px "+jd.border}}/><div><span style={{fontSize:11,fontWeight:800,color:jd.border}}>{jd.label}</span><span style={{fontSize:11,color:"#5278a8",marginLeft:6}}>{"\u00b7"} {jd.sub}</span></div></div>}
         {!sj&&<div style={{background:"#0a1426",borderRadius:9,padding:"9px 12px",border:"1px dashed #1e3a5f",textAlign:"center"}}><span style={{fontSize:11,color:"#2a4060"}}>Nessun colore selezionato</span></div>}
       </div>
       <div style={{background:"#0a1426",borderRadius:9,padding:"10px 12px",border:"1px solid #11203a",marginTop:12}}><div style={{fontSize:10,color:"#2a4060",fontStyle:"italic",lineHeight:1.5}}>Le persone non comprano il prodotto, ma la trasformazione</div></div>
@@ -1585,7 +1714,7 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onRiattiva, o
           <Av n={p.nome} c={p.cognome} color={clr} size={50}/>
           <div>
             <h2 style={{fontWeight:900,fontSize:19,color:"#eff6ff",letterSpacing:-0.5}}>{p.nome} {p.cognome}</h2>
-            <div style={{color:"#5278a8",fontSize:12,marginTop:2}}>{p.citta||"\u2014"} · {FONTE_ICO[p.fonte]} {p.fonte}</div>
+            <div style={{color:"#5278a8",fontSize:12,marginTop:2}}>{p.citta||"\u2014"} {"\u00b7"} {FONTE_ICO[p.fonte]} {p.fonte}</div>
             <div style={{display:"flex",gap:6,marginTop:7,flexWrap:"wrap"}}>
               <span style={{display:"inline-flex",alignItems:"center",borderRadius:6,padding:"2px 9px",fontSize:11,fontWeight:700,color:"#fff",background:clr,boxShadow:"0 0 10px "+clr+"45"}}>{FASE_LABEL[p.fase]}</span>
               {ciclo&&<span style={{display:"inline-flex",alignItems:"center",borderRadius:6,padding:"2px 9px",fontSize:11,fontWeight:700,color:"#fff",background:ciclo===CICLO_CORRENTE?"#2563eb":"#1e3a5f"}}>Ciclo {ciclo}</span>}
@@ -1613,7 +1742,7 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onRiattiva, o
             </div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:9}}>
-            {[{l:"Fase ora",v:FASE_LABEL[p.fase],color:clr},{l:"Ciclo conoscenza",v:ciclo?"Ciclo "+ciclo:"\u2014",color:ciclo===CICLO_CORRENTE?"#2563eb":undefined},{l:"Conosciuto il",v:fmt(p.conosciutoAt)},{l:"Follow-up",v:p.followUp?(od?"⚠️ Scaduto · ":dt?"📅 Oggi · ":"✅ ")+fmt(p.followUp):"Non impostato",color:od?"#f87171":dt?"#fbbf24":undefined}].map(({l,v,color:col})=>(<div key={l} style={box}><div style={lbl}>{l}</div><div style={{color:col||"#eff6ff",fontWeight:700,fontSize:13}}>{v}</div></div>))}
+            {[{l:"Fase ora",v:FASE_LABEL[p.fase],color:clr},{l:"Ciclo conoscenza",v:ciclo?"Ciclo "+ciclo:"\u2014",color:ciclo===CICLO_CORRENTE?"#2563eb":undefined},{l:"Conosciuto il",v:fmt(p.conosciutoAt)},{l:"Follow-up",v:p.followUp?(od?"\u26a0\ufe0f Scaduto \u00b7 ":dt?"\ud83d\udcc5 Oggi \u00b7 ":"\u2705 ")+fmt(p.followUp):"Non impostato",color:od?"#f87171":dt?"#fbbf24":undefined}].map(({l,v,color:col})=>(<div key={l} style={box}><div style={lbl}>{l}</div><div style={{color:col||"#eff6ff",fontWeight:700,fontSize:13}}>{v}</div></div>))}
             {p.telefono&&(
               <div style={box}>
                 <div style={lbl}>📞 Telefono</div>
