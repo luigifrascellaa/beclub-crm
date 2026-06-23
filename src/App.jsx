@@ -1,4 +1,3 @@
-// BE Club CRM v2
 import { useState, useEffect } from "react";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell, PieChart, Pie } from "recharts";
 import { TeamView } from "./components/Team";
@@ -533,6 +532,8 @@ export default function App() {
       }
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
   }
+
+  async function assignTeam(memberId, team) {
     try {
       await sbSetPosition(auth.token, auth.userId, memberId, team);
       setPositions(p => {
