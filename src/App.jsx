@@ -195,28 +195,18 @@ function teamStats(prospects) {
 }
 
 const TEMI = {
-  blu:   { label:"Blu",   bg:"#060b18", bg2:"#080f1f", bg3:"#0a1426", bg4:"#0d1b33", border:"var(--border)", border2:"var(--border2)", a1:"#2563eb", a2:"#0ea5e9", text:"#dbeafe", textMuted:"#5278a8", glow:"#2563eb" },
-  verde: { label:"Verde", bg:"#040e08", bg2:"#061410", bg3:"#08190e", bg4:"#0a2012", border:"#0f2a18", border2:"#1a4028", a1:"#059669", a2:"#10b981", text:"#d1fae5", textMuted:"#4a7a60", glow:"#059669" },
-  viola: { label:"Viola", bg:"#070412", bg2:"#0c0618", bg3:"#110820", bg4:"#160a28", border:"#1a0f35", border2:"#2d1a55", a1:"#7c3aed", a2:"#a78bfa", text:"#ede9fe", textMuted:"#6b5a8a", glow:"#7c3aed" },
-  rosa:  { label:"Rosa",  bg:"#120408", bg2:"#180610", bg3:"#200818", bg4:"#280a20", border:"#350f28", border2:"#551a40", a1:"#db2777", a2:"#f472b6", text:"#fce7f3", textMuted:"#8a4a6b", glow:"#db2777" },
-  oro:   { label:"Oro",   bg:"#080600", bg2:"#0f0d00", bg3:"#161200", bg4:"#1e1800", border:"#2a2200", border2:"#3d3200", a1:"#d97706", a2:"#fbbf24", text:"#fef3c7", textMuted:"#7a6530", glow:"#d97706" },
+  blu:   { label:"Blu",   preview:"linear-gradient(135deg,#1e40af,#0ea5e9)", vars:{"--bg":"#060b18","--bg2":"#080f1f","--bg3":"#0a1426","--bg4":"#0d1b33","--border":"#11203a","--border2":"#1e3a5f","--a1":"#2563eb","--a2":"#0ea5e9","--a1-10":"#2563eb1a","--a1-12":"#2563eb1f","--a1-13":"#2563eb21","--a1-18":"#2563eb2e","--a1-25":"#2563eb40","--a1-31":"#2563eb4f","--text":"#eff6ff","--muted":"#5278a8","--muted2":"#2a4060","--sidebar-active":"#0d1b33","--sidebar-border":"#2563eb40"} },
+  verde: { label:"Verde", preview:"linear-gradient(135deg,#065f46,#10b981)", vars:{"--bg":"#030d08","--bg2":"#041208","--bg3":"#06180d","--bg4":"#082014","--border":"#0a2a14","--border2":"#134d28","--a1":"#059669","--a2":"#10b981","--a1-10":"#0596691a","--a1-12":"#0596691f","--a1-13":"#05966921","--a1-18":"#0596692e","--a1-25":"#05966940","--a1-31":"#0596694f","--text":"#ecfdf5","--muted":"#3d7a5a","--muted2":"#1a3d2a","--sidebar-active":"#082014","--sidebar-border":"#05966940"} },
+  viola: { label:"Viola", preview:"linear-gradient(135deg,#4c1d95,#a78bfa)", vars:{"--bg":"#06030f","--bg2":"#0a0518","--bg3":"#0f0820","--bg4":"#140b2a","--border":"#1a1035","--border2":"#2e1a55","--a1":"#7c3aed","--a2":"#a78bfa","--a1-10":"#7c3aed1a","--a1-12":"#7c3aed1f","--a1-13":"#7c3aed21","--a1-18":"#7c3aed2e","--a1-25":"#7c3aed40","--a1-31":"#7c3aed4f","--text":"#f5f3ff","--muted":"#6b5a9a","--muted2":"#2d1a55","--sidebar-active":"#140b2a","--sidebar-border":"#7c3aed40"} },
+  rosa:  { label:"Rosa",  preview:"linear-gradient(135deg,#9d174d,#f472b6)", vars:{"--bg":"#0f0308","--bg2":"#180510","--bg3":"#200718","--bg4":"#2a0a20","--border":"#380d2a","--border2":"#5a1a42","--a1":"#db2777","--a2":"#f472b6","--a1-10":"#db27771a","--a1-12":"#db27771f","--a1-13":"#db277721","--a1-18":"#db27772e","--a1-25":"#db277740","--a1-31":"#db27774f","--text":"#fdf2f8","--muted":"#8a4a6b","--muted2":"#4a1530","--sidebar-active":"#2a0a20","--sidebar-border":"#db277740"} },
+  oro:   { label:"Oro",   preview:"linear-gradient(135deg,#78350f,#fbbf24)", vars:{"--bg":"#080600","--bg2":"#0f0c00","--bg3":"#181200","--bg4":"#201800","--border":"#2a2000","--border2":"#3d3000","--a1":"#d97706","--a2":"#fbbf24","--a1-10":"#d977061a","--a1-12":"#d977061f","--a1-13":"#d9770621","--a1-18":"#d977062e","--a1-25":"#d9770640","--a1-31":"#d977064f","--text":"#fffbeb","--muted":"#7a6530","--muted2":"#3d3000","--sidebar-active":"#201800","--sidebar-border":"#d9770640"} },
 };
 
 function applyTema(temaKey) {
   const t = TEMI[temaKey] || TEMI.blu;
   const root = document.documentElement;
-  root.style.setProperty("--bg",      t.bg);
-  root.style.setProperty("--bg2",     t.bg2);
-  root.style.setProperty("--bg3",     t.bg3);
-  root.style.setProperty("--bg4",     t.bg4);
-  root.style.setProperty("--border",  t.border);
-  root.style.setProperty("--border2", t.border2);
-  root.style.setProperty("--a1",      t.a1);
-  root.style.setProperty("--a2",      t.a2);
-  root.style.setProperty("--text",    t.text);
-  root.style.setProperty("--muted",   t.textMuted);
-  root.style.setProperty("--glow",    t.glow);
-  document.body.style.background = t.bg;
+  Object.entries(t.vars).forEach(([k,v]) => root.style.setProperty(k, v));
+  document.body.style.background = t.vars["--bg"];
 }
 
 const CSS = `
@@ -811,7 +801,7 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
         <button key={item.id} onClick={()=>setView(item.id)}
           style={{display:"flex",alignItems:"center",gap:9,width:"100%",padding:"10px 12px",background:view===item.id?"#0d1b33":"transparent",boxShadow:view===item.id?"inset 0 0 0 1px #2563eb40":"none",color:view===item.id?"#7dd3fc":"#5278a8",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,textAlign:"left",border:"none",transition:"all .2s"}}>
           <span>{item.icon}</span>{item.label}
-          {item.badge>0 && <span style={{marginLeft:"auto",background:"color-mix(in srgb, var(--a1) 12%, transparent)",color:"var(--a2)",borderRadius:99,padding:"1px 8px",fontSize:11,fontWeight:700}}>{item.badge}</span>}
+          {item.badge>0 && <span style={{marginLeft:"auto",background:"var(--a1-12)",color:"var(--a2)",borderRadius:99,padding:"1px 8px",fontSize:11,fontWeight:700}}>{item.badge}</span>}
         </button>
       ))}
 
@@ -1035,7 +1025,7 @@ function Statistiche({ data, dlProspects }) {
       </div>
       <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
         <div style={{padding:"1.1rem 1.4rem",borderBottom:"1px solid #11203a"}}><div style={{fontSize:13,fontWeight:800,color:"var(--text)"}}> Cicli a confronto</div></div>
-        <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",minWidth:600}}><thead><tr style={{borderBottom:"1px solid #11203a"}}><th style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px"}}>Ciclo</th>{FASI_FUNNEL.map(f=><th key={f} style={{textAlign:"center",color:FASE_CLR[f],fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 10px"}}>{FASE_LABEL[f]}</th>)}<th style={{textAlign:"center",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px"}}>Conv%</th></tr></thead><tbody>{tableRows.map(r=>(<tr key={r.c} className="hrow" style={{borderBottom:"1px solid #0d1b3355"}}><td style={{padding:"11px 16px"}}><span style={{background:r.c===CICLO_CORRENTE?"color-mix(in srgb, var(--a1) 13%, transparent)":"var(--border)",color:r.c===CICLO_CORRENTE?"#60a5fa":"#5278a8",borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:700}}>C{r.c}</span></td>{FASI_FUNNEL.map(f=><td key={f} style={{textAlign:"center",padding:"11px 10px",fontWeight:700,fontSize:13,color:r[f]>0?"#eff6ff":"var(--border2)"}}>{r[f]}</td>)}<td style={{textAlign:"center",padding:"11px 16px",fontWeight:800,fontSize:13,color:r.conv>=20?"#10b981":r.conv>=10?"#0ea5e9":"#f59e0b"}}>{r.conv}%</td></tr>))}</tbody></table></div>
+        <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",minWidth:600}}><thead><tr style={{borderBottom:"1px solid #11203a"}}><th style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px"}}>Ciclo</th>{FASI_FUNNEL.map(f=><th key={f} style={{textAlign:"center",color:FASE_CLR[f],fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 10px"}}>{FASE_LABEL[f]}</th>)}<th style={{textAlign:"center",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px"}}>Conv%</th></tr></thead><tbody>{tableRows.map(r=>(<tr key={r.c} className="hrow" style={{borderBottom:"1px solid #0d1b3355"}}><td style={{padding:"11px 16px"}}><span style={{background:r.c===CICLO_CORRENTE?"var(--a1-13)":"var(--border)",color:r.c===CICLO_CORRENTE?"#60a5fa":"#5278a8",borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:700}}>C{r.c}</span></td>{FASI_FUNNEL.map(f=><td key={f} style={{textAlign:"center",padding:"11px 10px",fontWeight:700,fontSize:13,color:r[f]>0?"#eff6ff":"var(--border2)"}}>{r[f]}</td>)}<td style={{textAlign:"center",padding:"11px 16px",fontWeight:800,fontSize:13,color:r.conv>=20?"#10b981":r.conv>=10?"#0ea5e9":"#f59e0b"}}>{r.conv}%</td></tr>))}</tbody></table></div>
       </div>
     </div>
   );
@@ -1093,7 +1083,7 @@ function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, s
                 <tr key={p.id} className="hrow" onClick={()=>onOpen(p)} style={{cursor:"pointer",borderBottom:"1px solid #0d1b3355"}}>
                   <td style={{padding:"12px 16px"}}><div style={{display:"flex",alignItems:"center",gap:10}}><Av n={p.nome} c={p.cognome} color={FASE_CLR[p.fase]}/><span style={{color:"var(--text)",fontWeight:700,fontSize:13}}>{p.nome} {p.cognome}</span></div></td>
                   {listaMode==="team"&&<td style={{padding:"12px 16px"}}><span style={{fontSize:11,color:"#8b5cf6",fontWeight:700,background:"#8b5cf618",borderRadius:6,padding:"2px 8px"}}>{p._ownerName||"\u2014"}</span></td>}
-                  <td style={{padding:"12px 16px"}}>{c?<span style={{background:c===CICLO_CORRENTE?"color-mix(in srgb, var(--a1) 13%, transparent)":"var(--border)",color:c===CICLO_CORRENTE?"#60a5fa":"var(--muted)",borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>C{c}</span>:<span style={{color:"var(--border2)"}}>\u2014</span>}</td>
+                  <td style={{padding:"12px 16px"}}>{c?<span style={{background:c===CICLO_CORRENTE?"var(--a1-13)":"var(--border)",color:c===CICLO_CORRENTE?"#60a5fa":"var(--muted)",borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>C{c}</span>:<span style={{color:"var(--border2)"}}>\u2014</span>}</td>
                   <td style={{padding:"12px 16px",color:"var(--muted)",fontSize:12}}>{fmt(p.conosciutoAt)}</td>
                   <td style={{padding:"12px 16px",color:"var(--muted)",fontSize:12}}>{FONTE_ICO[p.fonte]} {p.fonte}</td>
                   <td style={{padding:"12px 16px"}}><span style={{display:"inline-flex",alignItems:"center",borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:700,color:"#fff",background:FASE_CLR[p.fase],boxShadow:"0 0 8px "+FASE_CLR[p.fase]+"35"}}>{FASE_LABEL[p.fase]}</span></td>

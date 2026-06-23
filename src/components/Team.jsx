@@ -239,7 +239,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
       <div style={{background:"var(--bg2)",border:"1px solid #2563eb30",borderRadius:14,padding:"1.2rem 1.4rem",marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,flexWrap:"wrap",gap:8}}>
           <div style={{fontSize:11,fontWeight:700,color:"var(--a1)",textTransform:"uppercase",letterSpacing:1}}>Il tuo link referral</div>
-          {auth?.profile?.referral_code&&<div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:10,color:"var(--muted)"}}>Il tuo ID:</span><span style={{background:"color-mix(in srgb, var(--a1) 12%, transparent)",color:"var(--a2)",borderRadius:6,padding:"2px 10px",fontSize:12,fontWeight:800,fontFamily:"monospace"}}>{auth.profile.referral_code}</span></div>}
+          {auth?.profile?.referral_code&&<div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:10,color:"var(--muted)"}}>Il tuo ID:</span><span style={{background:"var(--a1-12)",color:"var(--a2)",borderRadius:6,padding:"2px 10px",fontSize:12,fontWeight:800,fontFamily:"monospace"}}>{auth.profile.referral_code}</span></div>}
         </div>
         {referralLink
           ?<div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
