@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell, PieChart, Pie } from "recharts";
 import { TeamView } from "./components/Team";
 import { ProfiloView } from "./components/Profilo";
+import { ListaNomiView } from "./components/ListaNomi";
 
 const SB_URL = "https://kuxrpbsvnkxhsicbyupp.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1eHJwYnN2bmt4aHNpY2J5dXBwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNzMwODIsImV4cCI6MjA5NzY0OTA4Mn0.s_lqOUC8939I2Wgf-Qkcq9WaiH1Nxze1uv4-PIV6s7I";
@@ -500,6 +501,32 @@ export default function App() {
     closeModal();
   }
 
+  async function invitaProspect(fields) {
+    const np = {
+      id: genId(),
+      nome: fields.nome||"",
+      cognome: fields.cognome||"",
+      citta: fields.citta||"",
+      telefono: fields.telefono||"",
+      instagram: fields.instagram||"",
+      note: fields.note||"",
+      profilazione: fields.profilazione||{},
+      fonte: fields.fonte||"Offline",
+      fase: "INVITO",
+      conosciutoAt: fields.conosciutoAt||today(),
+      followUp: "",
+      storico: [],
+      pacchetto: "",
+      checklist: { kyc:false, pandadoc:false, click:false },
+    };
+    np.storico = buildStorico(np, "INVITO", np.conosciutoAt);
+    try {
+      await sbInsert(auth.token, toDB(np, auth.userId));
+      setData(d=>[...d, np]);
+      showToast((np.nome||"")+" aggiunto ai prospect");
+    } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
+  }
+
   async function advanceFase(p) {
     const i=FASI_FUNNEL.indexOf(p.fase);
     if (i<0||i>=FASI_FUNNEL.length-1) return;
@@ -695,6 +722,7 @@ export default function App() {
         {view==="lista" && <Lista prospects={listaData} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={setListaMode} hasTeam={dlProspects.length>0} />}
         {view==="stats"   && <Statistiche data={data} dlProspects={dlProspects} />}
         {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} />}
+        {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} />}
         {view==="profilo" && <ProfiloView auth={auth} onUpdateProfile={updateProfile} downlineCount={downline.length} showToast={showToast} />}
       </main>
 
@@ -719,6 +747,7 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
     { id:"lista",   icon:"", label:"Prospect", badge:data.length },
     { id:"stats",   icon:"", label:"Statistiche" },
     { id:"team",    icon:"", label:"Team", badge:downlineCount||0 },
+    { id:"nomi",    icon:"", label:"Lista Nomi" },
     { id:"profilo", icon:"", label:"Profilo" },
   ];
   return (
