@@ -179,13 +179,22 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
           {mP.length===0
             ?<div style={{padding:"3rem",textAlign:"center",color:"#1e3a5f"}}>Nessun prospect ancora</div>
             :<table style={{width:"100%",borderCollapse:"collapse"}}>
-              <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Nome","Conosciuto","Fonte","Fase"].map(h=>(<th key={h} style={{textAlign:"left",color:"#3b5478",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px"}}>{h}</th>))}</tr></thead>
+              <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Nome","Conosciuto","Fonte","Fase","Checklist"].map(h=>(<th key={h} style={{textAlign:"left",color:"#3b5478",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px"}}>{h}</th>))}</tr></thead>
               <tbody>{mP.map(p=>(
                 <tr key={p.id} style={{borderBottom:"1px solid #0d1b3355"}}>
                   <td style={{padding:"11px 16px"}}><div style={{display:"flex",alignItems:"center",gap:9}}><Av n={p.nome} c={p.cognome} color={FASE_CLR[p.fase]}/><span style={{color:"#eff6ff",fontWeight:700,fontSize:13}}>{p.nome} {p.cognome}</span></div></td>
                   <td style={{padding:"11px 16px",color:"#5278a8",fontSize:12}}>{fmt(p.conosciutoAt)}</td>
                   <td style={{padding:"11px 16px",color:"#5278a8",fontSize:12}}>{p.fonte}</td>
                   <td style={{padding:"11px 16px"}}><span style={{display:"inline-flex",alignItems:"center",borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:700,color:"#fff",background:FASE_CLR[p.fase]}}>{FASE_LABEL[p.fase]}</span></td>
+                  <td style={{padding:"11px 16px"}}>
+                    <div style={{display:"flex",gap:5}}>
+                      {["kyc","pandadoc","click"].map(k=>{
+                        const done=p.checklist?.[k];
+                        const label=k==="pandadoc"?"PD":k.toUpperCase();
+                        return <span key={k} style={{fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:5,background:done?"#10b98120":"#1e3a5f20",color:done?"#10b981":"#3b5478",border:"1px solid "+(done?"#10b98140":"#1e3a5f")}}>{label}</span>;
+                      })}
+                    </div>
+                  </td>
                 </tr>
               ))}</tbody>
             </table>

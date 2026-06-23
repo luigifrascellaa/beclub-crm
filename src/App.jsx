@@ -55,6 +55,7 @@ function toApp(r) {
     note:r.note||"", storico:r.storico||[], profilazione:r.profilazione||{},
     pacchetto:r.pacchetto||"",
     telefono:r.telefono||"", instagram:r.instagram||"",
+    checklist:r.checklist||{kyc:false,pandadoc:false,click:false},
   };
 }
 function toDB(p, uid) {
@@ -64,6 +65,7 @@ function toDB(p, uid) {
     follow_up:p.followUp||null, note:p.note, storico:p.storico, profilazione:p.profilazione,
     pacchetto:p.pacchetto||null,
     telefono:p.telefono||null, instagram:p.instagram||null,
+    checklist:p.checklist||{kyc:false,pandadoc:false,click:false},
   };
 }
 
@@ -513,6 +515,15 @@ export default function App() {
     } catch(e) { showToast("Errore salvataggio","#ef4444"); }
   }
 
+  async function updateChecklist(id, checklist) {
+    const p=data.find(x=>x.id===id); if (!p) return;
+    const upd={...p,checklist};
+    try {
+      await sbUpdate(auth.token,id,toDB(upd,auth.userId));
+      setData(d=>d.map(x=>x.id===id?upd:x)); setSel(upd);
+    } catch(e) { showToast("Errore salvataggio","#ef4444"); }
+  }
+
   async function updateProfile(fields) {
     try {
       await sbUpdateProfile(auth.token, auth.userId, fields);
@@ -628,7 +639,7 @@ export default function App() {
         <div onClick={closeModal} style={{position:"fixed",inset:0,background:"#00000090",backdropFilter:"blur(8px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16,animation:"fadeIn .2s"}}>
           <div className="pop" onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520}}>
             {modal==="detail"
-              ? <DetailModal p={sel} onEdit={()=>{setForm({...sel});setModal("edit");}} onAdvance={()=>advanceFase(sel)} onFollowUp={()=>moveFase(sel,"FOLLOW_UP")} onNonInt={()=>moveFase(sel,"NON_INT")} onRiattiva={()=>moveFase(sel,"RIATTIVA")} onClose={closeModal} onUpdateProfilo={pr=>updateProfilo(sel.id,pr)} />
+              ? <DetailModal p={sel} onEdit={()=>{setForm({...sel});setModal("edit");}} onAdvance={()=>advanceFase(sel)} onFollowUp={()=>moveFase(sel,"FOLLOW_UP")} onNonInt={()=>moveFase(sel,"NON_INT")} onRiattiva={()=>moveFase(sel,"RIATTIVA")} onClose={closeModal} onUpdateProfilo={pr=>updateProfilo(sel.id,pr)} onUpdateChecklist={cl=>updateChecklist(sel.id,cl)} />
               : <FormModal form={form} setForm={setForm} onSave={saveForm} onClose={closeModal} onDelete={modal==="edit"?()=>deleteProp(form.id):null} isEdit={modal==="edit"} />
             }
           </div>
@@ -910,7 +921,7 @@ function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, s
         ?<div style={{textAlign:"center",padding:"4rem",color:"#1e3a5f"}}><div style={{fontSize:44,marginBottom:12}}>◆</div><p style={{fontSize:14,marginBottom:14}}>Nessun prospect trovato</p><button onClick={onAdd} style={{padding:"9px 20px",fontSize:13,fontWeight:800,background:"linear-gradient(135deg,#2563eb,#0ea5e9)",color:"#fff",border:"none",borderRadius:10,cursor:"pointer"}}>Aggiungi il primo</button></div>
         :<div style={{background:"#080f1f",border:"1px solid #11203a",borderRadius:14,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Prospect","Ciclo","Conosciuto","Fonte","Fase","Profilo","Pers.",""].map(h=>(<th key={h} style={{textAlign:"left",color:"#3b5478",fontWeight:700,fontSize:10,textTransform:"uppercase",letterSpacing:.8,padding:"12px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
+            <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Prospect","Ciclo","Conosciuto","Fonte","Fase","Checklist","Profilo","Pers.",""].map(h=>(<th key={h} style={{textAlign:"left",color:"#3b5478",fontWeight:700,fontSize:10,textTransform:"uppercase",letterSpacing:.8,padding:"12px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
             <tbody>{prospects.map(p=>{
               const c=cicloOfDate(p.conosciutoAt);
               const badge=profiloBadge(p);
@@ -923,6 +934,15 @@ function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, s
                   <td style={{padding:"12px 16px",color:"#5278a8",fontSize:12}}>{fmt(p.conosciutoAt)}</td>
                   <td style={{padding:"12px 16px",color:"#5278a8",fontSize:12}}>{FONTE_ICO[p.fonte]} {p.fonte}</td>
                   <td style={{padding:"12px 16px"}}><span style={{display:"inline-flex",alignItems:"center",borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:700,color:"#fff",background:FASE_CLR[p.fase],boxShadow:"0 0 8px "+FASE_CLR[p.fase]+"35"}}>{FASE_LABEL[p.fase]}</span></td>
+                  <td style={{padding:"12px 16px"}}>
+                    <div style={{display:"flex",gap:6}}>
+                      {["kyc","pandadoc","click"].map(k=>{
+                        const done=p.checklist?.[k];
+                        const label=k==="pandadoc"?"PD":k.toUpperCase();
+                        return <span key={k} style={{fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:5,background:done?"#10b98120":"#1e3a5f20",color:done?"#10b981":"#3b5478",border:"1px solid "+(done?"#10b98140":"#1e3a5f")}}>{label}</span>;
+                      })}
+                    </div>
+                  </td>
                   <td style={{padding:"12px 16px"}}>{badge.compilati===0?<span style={{color:"#2a4060",fontSize:11}}>\u2014</span>:<span style={{display:"inline-flex",alignItems:"center",gap:4,borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:800,color:bc,background:bc+"18",border:"1px solid "+bc+"30"}}>🎯 {badge.positivi}/{PROFILO_TOTAL}</span>}</td>
                   <td style={{padding:"12px 16px"}}>{jung?<span title={jung.sub} style={{display:"inline-flex",alignItems:"center",gap:6,borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:800,color:jung.border,background:jung.border+"18",border:"1px solid "+jung.border+"35"}}><span style={{width:8,height:8,borderRadius:"50%",background:jung.border,flexShrink:0,boxShadow:"0 0 6px "+jung.border}}/>{jung.label}</span>:<span style={{color:"#2a4060",fontSize:11}}>\u2014</span>}</td>
                   <td style={{padding:"12px 16px",color:"#1e3a5f",fontSize:16}}>›</td>
@@ -1050,7 +1070,7 @@ function ProfilazioneTab({ p, onUpdateProfilo }) {
 }
 
 // ─── DETAIL MODAL ─────────────────────────────────────────────────────────────
-function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onRiattiva, onClose, onUpdateProfilo }) {
+function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onRiattiva, onClose, onUpdateProfilo, onUpdateChecklist }) {
   const [activeTab,setActiveTab]=useState("dettagli");
   const clr=FASE_CLR[p.fase];const ci=FASI_FUNNEL.indexOf(p.fase);const isSpeciale=FASI_SPECIALI.includes(p.fase);
   const od=isOver(p.followUp);const dt=isToday(p.followUp);const ciclo=cicloOfDate(p.conosciutoAt);
@@ -1118,6 +1138,23 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onRiattiva, o
           </div>
           {storico.length>0&&(<div style={{...box,marginBottom:9}}><div style={lbl}>🛤️ Storico percorso</div><div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>{storico.map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:9}}><span style={{width:8,height:8,borderRadius:99,background:FASE_CLR[s.fase],flexShrink:0,boxShadow:"0 0 6px "+FASE_CLR[s.fase]+"70"}}/><span style={{fontSize:12.5,fontWeight:700,color:"#eff6ff",minWidth:64}}>{FASE_LABEL[s.fase]}</span><span style={{fontSize:11,color:"#5278a8"}}>{fmt(s.data)}</span><span style={{fontSize:10,color:"#3b5478",marginLeft:"auto"}}>Ciclo {cicloOfDate(s.data)||"\u2014"}</span></div>))}</div></div>)}
           {p.note&&<div style={{...box,marginBottom:9}}><div style={lbl}>📝 Note</div><p style={{color:"#94b5d8",lineHeight:1.6,fontSize:13,marginTop:4}}>{p.note}</p></div>}
+          <div style={{...box,marginBottom:9}}>
+            <div style={lbl}>Checklist</div>
+            <div style={{display:"flex",gap:10,marginTop:8}}>
+              {[{key:"kyc",label:"KYC"},{key:"pandadoc",label:"PANDA DOC"},{key:"click",label:"CLICK"}].map(({key,label})=>{
+                const done=p.checklist?.[key]||false;
+                return(
+                  <button key={key} onClick={()=>onUpdateChecklist({...p.checklist,[key]:!done})}
+                    style={{display:"flex",alignItems:"center",gap:7,padding:"8px 14px",background:done?"#10b98118":"#0a1426",border:"1.5px solid "+(done?"#10b981":"#1e3a5f"),borderRadius:9,cursor:"pointer",color:done?"#10b981":"#5278a8",fontWeight:700,fontSize:12,transition:"all .2s"}}>
+                    <div style={{width:16,height:16,borderRadius:4,border:"1.5px solid "+(done?"#10b981":"#3b5478"),background:done?"#10b981":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      {done&&<span style={{color:"#fff",fontSize:10,fontWeight:900,lineHeight:1}}>{"\u2713"}</span>}
+                    </div>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div style={{display:"flex",gap:9,marginTop:16,flexWrap:"wrap"}}>
             {!isSpeciale&&ci<FASI_FUNNEL.length-1&&<button onClick={onAdvance} style={{padding:"9px 16px",background:"linear-gradient(135deg,"+FASE_CLR[FASI_FUNNEL[ci+1]]+","+FASE_CLR[FASI_FUNNEL[ci+1]]+"bb)",color:"#fff",border:"none",borderRadius:9,cursor:"pointer",fontWeight:800,fontSize:12}}>Avanza → {FASE_LABEL[FASI_FUNNEL[ci+1]]}</button>}
             {isSpeciale&&<button onClick={onRiattiva} style={{padding:"9px 16px",background:"linear-gradient(135deg,#2563eb,#0ea5e9)",color:"#fff",border:"none",borderRadius:9,cursor:"pointer",fontWeight:800,fontSize:12}}>↩ Riattiva nel Funnel</button>}
