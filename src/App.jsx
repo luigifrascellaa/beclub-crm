@@ -57,6 +57,7 @@ function toApp(r) {
     pacchetto:r.pacchetto||"",
     telefono:r.telefono||"", instagram:r.instagram||"",
     checklist:r.checklist||{kyc:false,pandadoc:false,click:false},
+    interesse:r.interesse||"",
   };
 }
 function toDB(p, uid) {
@@ -67,6 +68,7 @@ function toDB(p, uid) {
     pacchetto:p.pacchetto||null,
     telefono:p.telefono||null, instagram:p.instagram||null,
     checklist:p.checklist||{kyc:false,pandadoc:false,click:false},
+    interesse:p.interesse||null,
   };
 }
 
@@ -84,6 +86,8 @@ const FASI_SPECIALI = ["FOLLOW_UP","NON_INT"];
 const FASI          = [...FASI_FUNNEL, ...FASI_SPECIALI];
 const FONTI         = ["Instagram","TikTok","Offline","Referenza","Lista Nomi"];
 const FONTE_ICO     = { Instagram:"", TikTok:"", Offline:"", Referenza:"", "Lista Nomi":"" };
+const INTERESSE     = ["Alto","Medio","Basso"];
+const INTERESSE_CLR = { Alto:"#10b981", Medio:"#f59e0b", Basso:"#ef4444" };
 
 const FASE_CLR = {
   INVITO:"#8b5cf6", FUP1:"#2563eb", FUP2:"#3b82f6", PACK:"#0ea5e9",
@@ -377,6 +381,7 @@ export default function App() {
   const [fFonte, setFFonte]       = useState("");
   const [fCiclo, setFCiclo]       = useState("");
   const [fCitta, setFCitta]       = useState("");
+  const [fInteresse, setFInteresse] = useState("");
   const [ready, setReady]         = useState(false);
   const [saving, setSaving]       = useState(false);
   const [downline, setDownline]   = useState([]);
@@ -701,7 +706,8 @@ export default function App() {
     return (!q||(p.nome+" "+p.cognome+" "+(p.citta||"")).toLowerCase().includes(q))
       &&(!fFase||p.fase===fFase)&&(!fFonte||p.fonte===fFonte)
       &&(!fCiclo||cicloOfDate(p.conosciutoAt)===Number(fCiclo))
-      &&(!fCitta||( p.citta||"").toLowerCase().includes(fCitta.toLowerCase()));
+      &&(!fCitta||( p.citta||"").toLowerCase().includes(fCitta.toLowerCase()))
+      &&(!fInteresse||p.interesse===fInteresse);
   });
 
   if (!auth) return <AuthScreen onAuth={setAuth} />;
@@ -721,7 +727,7 @@ export default function App() {
 
       <main style={{flex:1,overflowY:"auto",height:"100vh"}}>
         {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} />}
-        {view==="lista" && <Lista prospects={listaData} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={setListaMode} hasTeam={dlProspects.length>0} />}
+        {view==="lista" && <Lista prospects={listaData} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={setListaMode} hasTeam={dlProspects.length>0} />}
         {view==="stats"   && <Statistiche data={data} dlProspects={dlProspects} />}
         {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} />}
         {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} />}
@@ -993,7 +999,7 @@ function Statistiche({ data, dlProspects }) {
 }
 
 //  LISTA 
-function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, setFFonte, fCiclo, setFCiclo, fCitta, setFCitta, onOpen, onAdd, listaMode, setListaMode, hasTeam }) {
+function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, setFFonte, fCiclo, setFCiclo, fCitta, setFCitta, fInteresse, setFInteresse, onOpen, onAdd, listaMode, setListaMode, hasTeam }) {
   return (
     <div style={{padding:"2rem 2.2rem",maxWidth:1280,margin:"0 auto"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.4rem",flexWrap:"wrap",gap:12}}>
@@ -1025,12 +1031,16 @@ function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, s
         <select value={fFonte} onChange={e=>setFFonte(e.target.value)} style={{flex:1,minWidth:120}}><option value="">Tutte le fonti</option>{FONTI.map(f=><option key={f}>{f}</option>)}</select>
         <select value={fCiclo} onChange={e=>setFCiclo(e.target.value)} style={{flex:1,minWidth:140}}><option value="">Tutti i cicli</option>{CICLO_NUMS.map(c=><option key={c} value={c}>Ciclo {c}</option>)}</select>
         <input value={fCitta} onChange={e=>setFCitta(e.target.value)} placeholder="Filtra per citta..." style={{flex:1,minWidth:130}} />
+        <select value={fInteresse} onChange={e=>setFInteresse(e.target.value)} style={{flex:1,minWidth:120}}>
+          <option value="">Tutto l interesse</option>
+          {INTERESSE.map(v=><option key={v} value={v}>{v}</option>)}
+        </select>
       </div>
       {prospects.length===0
         ?<div style={{textAlign:"center",padding:"4rem",color:"#1e3a5f"}}><div style={{fontSize:44,marginBottom:12}}></div><p style={{fontSize:14,marginBottom:14}}>Nessun prospect trovato</p><button onClick={onAdd} style={{padding:"9px 20px",fontSize:13,fontWeight:800,background:"linear-gradient(135deg,#2563eb,#0ea5e9)",color:"#fff",border:"none",borderRadius:10,cursor:"pointer"}}>Aggiungi il primo</button></div>
         :<div style={{background:"#080f1f",border:"1px solid #11203a",borderRadius:14,overflow:"hidden"}}>
           <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Prospect",...(listaMode==="team"?["Di"]:[]),"Ciclo","Conosciuto","Fonte","Fase","Checklist","Profilo","Pers.",""].map(h=>(<th key={h} style={{textAlign:"left",color:"#3b5478",fontWeight:700,fontSize:10,textTransform:"uppercase",letterSpacing:.8,padding:"12px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
+            <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Prospect",...(listaMode==="team"?["Di"]:[]),"Ciclo","Conosciuto","Fonte","Fase","Interesse","Checklist","Profilo","Pers.",""].map(h=>(<th key={h} style={{textAlign:"left",color:"#3b5478",fontWeight:700,fontSize:10,textTransform:"uppercase",letterSpacing:.8,padding:"12px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
             <tbody>{prospects.map(p=>{
               const c=cicloOfDate(p.conosciutoAt);
               const badge=profiloBadge(p);
@@ -1045,6 +1055,11 @@ function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, s
                   <td style={{padding:"12px 16px",color:"#5278a8",fontSize:12}}>{FONTE_ICO[p.fonte]} {p.fonte}</td>
                   <td style={{padding:"12px 16px"}}><span style={{display:"inline-flex",alignItems:"center",borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:700,color:"#fff",background:FASE_CLR[p.fase],boxShadow:"0 0 8px "+FASE_CLR[p.fase]+"35"}}>{FASE_LABEL[p.fase]}</span></td>
                   <td style={{padding:"12px 16px"}}>
+                    {p.interesse
+                      ? <span style={{fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:6,color:INTERESSE_CLR[p.interesse],background:INTERESSE_CLR[p.interesse]+"20"}}>{p.interesse}</span>
+                      : <span style={{color:"#2a4060",fontSize:11}}>\u2014</span>
+                    }
+                  </td>
                     {p.fase==="SUB"
                       ? <div style={{display:"flex",gap:6}}>
                           {["kyc","pandadoc","click"].map(k=>{
@@ -1093,6 +1108,21 @@ function FormModal({ form, setForm, onSave, onClose, onDelete, isEdit }) {
         <div style={{gridColumn:"1/-1"}}><label style={lbl}>Data conoscenza</label><input type="date" value={form.conosciutoAt||today()} onChange={e=>set("conosciutoAt",e.target.value)} /></div>
         <div style={{gridColumn:"1/-1"}}><label style={lbl}>Ciclo</label><select value={cicloCalc} onChange={e=>onCicloChange(Number(e.target.value))}>{CICLO_NUMS.map(c=><option key={c} value={c}>Ciclo {c} — {cicloLabel(c)}</option>)}</select></div>
         <div style={{gridColumn:"1/-1"}}><label style={lbl}>Prossimo Follow-up</label><input type="date" value={form.followUp||""} onChange={e=>set("followUp",e.target.value)} /></div>
+        <div style={{gridColumn:"1/-1"}}>
+          <label style={lbl}>Grado di interesse</label>
+          <div style={{display:"flex",gap:8}}>
+            {INTERESSE.map(v=>{
+              const active=form.interesse===v;
+              const color=INTERESSE_CLR[v];
+              return(
+                <button key={v} onClick={()=>set("interesse",active?null:v)}
+                  style={{flex:1,padding:"9px",background:active?color+"25":"#0a1426",border:"2px solid "+(active?color:"#1e3a5f"),borderRadius:9,cursor:"pointer",color:active?color:"#5278a8",fontWeight:700,fontSize:13,fontFamily:"inherit",transition:"all .2s"}}>
+                  {v}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         {form.fase==="SUB" && (
           <div style={{gridColumn:"1/-1"}}>
             <label style={lbl}>Pacchetto</label>
@@ -1204,6 +1234,7 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onRiattiva, o
               {ciclo&&<span style={{display:"inline-flex",alignItems:"center",borderRadius:6,padding:"2px 9px",fontSize:11,fontWeight:700,color:"#fff",background:ciclo===CICLO_CORRENTE?"#2563eb":"#1e3a5f"}}>Ciclo {ciclo}</span>}
               {badge.compilati>0&&<span style={{display:"inline-flex",alignItems:"center",borderRadius:6,padding:"2px 9px",fontSize:11,fontWeight:700,color:"#10b981",background:"#10b98118",border:"1px solid #10b98130"}}> {badge.positivi}/{PROFILO_TOTAL}</span>}
               {p._ownerName&&<span style={{display:"inline-flex",alignItems:"center",borderRadius:6,padding:"2px 9px",fontSize:11,fontWeight:700,color:"#8b5cf6",background:"#8b5cf618",border:"1px solid #8b5cf630"}}> {p._ownerName.trim()}</span>}
+              {p.interesse&&<span style={{display:"inline-flex",alignItems:"center",borderRadius:6,padding:"2px 9px",fontSize:11,fontWeight:700,color:INTERESSE_CLR[p.interesse],background:INTERESSE_CLR[p.interesse]+"18",border:"1px solid "+INTERESSE_CLR[p.interesse]+"30"}}>{p.interesse}</span>}
             </div>
           </div>
         </div>
