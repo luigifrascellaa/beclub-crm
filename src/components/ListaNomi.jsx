@@ -290,8 +290,15 @@ export function ListaNomiView({ auth, onInvitaProspect }) {
           <p style={{color:"var(--muted)",fontSize:12,marginTop:3}}>La tua lista personale — privata, visibile solo a te</p>
         </div>
         <button onClick={()=>{setSel(null);setModal("add");}} style={{padding:"9px 18px",fontSize:13,fontWeight:800,background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:10,cursor:"pointer"}}>
-          + Aggiungi
-        </button>
+        <div style={{display:"flex",gap:10}}>
+          <a href="https://qrco.de/bgsu0X" target="_blank" rel="noreferrer"
+            style={{padding:"9px 18px",fontSize:13,fontWeight:800,background:"var(--bg4)",color:"var(--text)",border:"1px solid var(--border2)",borderRadius:10,cursor:"pointer",textDecoration:"none",display:"flex",alignItems:"center",gap:6}}>
+            Memory Jogger
+          </a>
+          <button onClick={()=>{setSel(null);setModal("add");}} style={{padding:"9px 18px",fontSize:13,fontWeight:800,background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:10,cursor:"pointer"}}>
+            + Aggiungi
+          </button>
+        </div>
       </div>
 
       <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
