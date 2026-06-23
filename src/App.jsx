@@ -516,7 +516,13 @@ export default function App() {
   async function updateProfile(fields) {
     try {
       await sbUpdateProfile(auth.token, auth.userId, fields);
-      setAuth(a => ({ ...a, profile: { ...a.profile, ...fields } }));
+      const newProfile = { ...auth.profile, ...fields };
+      setAuth(a => {
+        const updated = { ...a, profile: newProfile };
+        const saved = localStorage.getItem("becrm_session");
+        if (saved) localStorage.setItem("becrm_session", JSON.stringify(updated));
+        return updated;
+      });
       showToast("Profilo aggiornato ✅");
       // Se cambia positioned_under ricarica la downline
       if (fields.positioned_under !== undefined) {
