@@ -649,28 +649,32 @@ export default function App() {
 
   async function assignTeam(memberId, team) {
     try {
-      // Salva la squadra relativa a me
+      // Salva la squadra relativa a me in team_positions
       await sbSetPosition(auth.token, auth.userId, memberId, team);
-      setPositions(p => {
-        const filtered = p.filter(x => !(x.upline_id===auth.userId && x.member_id===memberId));
-        return [...filtered, { upline_id:auth.userId, member_id:memberId, team }];
-      });
+      const newPositions = positions.filter(x => !(x.upline_id===auth.userId && x.member_id===memberId));
+      newPositions.push({ upline_id:auth.userId, member_id:memberId, team });
+      setPositions(newPositions);
 
-      // Controlla se ho già un diretto in quella leg
-      const allProfiles = await sbGetAllProfiles(auth.token);
-      const myDirects = (allProfiles||[]).filter(p => p.positioned_under === auth.userId);
-      const myPos = (await sbGetPositions(auth.token))||[];
-      const legOccupied = myPos.some(p => p.upline_id===auth.userId && p.member_id!==memberId && p.team===team && myDirects.some(d=>d.id===p.member_id && d.positioned_under===auth.userId));
+      // Controlla se ho già un diretto posizionato in quella leg usando lo state locale
+      const myDirectsInLeg = downline.filter(m =>
+        m.positioned_under === auth.userId &&
+        m.id !== memberId &&
+        newPositions.some(p => p.upline_id===auth.userId && p.member_id===m.id && p.team===team)
+      );
 
-      if (!legOccupied) {
-        // Slot libero — posiziona direttamente sotto di me
+      if (myDirectsInLeg.length === 0) {
+        // Slot libero — posiziona automaticamente sotto di me
         await sbPositionMember(auth.token, memberId, auth.userId);
         setDownline(d=>d.map(m=>m.id===memberId?{...m,positioned_under:auth.userId}:m));
         showToast("Posizionato nella leg "+team);
       } else {
-        // Slot occupato — metti in attesa (positioned_under rimane null, upline_id = me)
-        // Non cambiamo positioned_under, la persona resta visibile grazie a upline_id
-        showToast("In attesa — selezionalo nell albero per posizionarlo");
+        // Slot occupato — va in lista d'attesa
+        // Se era già posizionato, rimuovilo dall'albero
+        if (downline.find(m=>m.id===memberId)?.positioned_under) {
+          await sbPositionMember(auth.token, memberId, null);
+          setDownline(d=>d.map(m=>m.id===memberId?{...m,positioned_under:null}:m));
+        }
+        showToast("Slot occupato — in attesa, selezionalo nell albero per piazzarlo");
       }
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
   }
