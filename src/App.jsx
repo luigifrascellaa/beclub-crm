@@ -21,7 +21,13 @@ async function sbFetch(path, opts = {}) {
   const text = await res.text();
   if (!res.ok) {
     const e = text ? JSON.parse(text) : {};
-    throw new Error(e.message || res.statusText);
+    const msg = e.message || res.statusText;
+    // Se il token è scaduto, forza logout
+    if (msg.toLowerCase().includes("jwt expired") || msg.toLowerCase().includes("invalid jwt") || res.status === 401) {
+      localStorage.removeItem("becrm_session");
+      window.location.reload();
+    }
+    throw new Error(msg);
   }
   return text ? JSON.parse(text) : null;
 }
