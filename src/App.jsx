@@ -229,7 +229,7 @@ body{background:var(--bg);color:var(--text);overflow:hidden}
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
 input,select,textarea{background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:9px 13px;color:var(--text);font-size:13px;font-family:'Inter',sans-serif;outline:none;width:100%;transition:border .2s}
-input:focus,select:focus,textarea:focus{border-color:var(--a1);box-shadow:0 0 0 3px color-mix(in srgb, var(--a1) 13%, transparent)}
+input:focus,select:focus,textarea:focus{border-color:var(--a1);box-shadow:0 0 0 3px var(--a1-13)}
 input::placeholder,textarea::placeholder{color:var(--muted)}
 select option{background:var(--bg3)}
 input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.6) sepia(1) hue-rotate(180deg);cursor:pointer}
@@ -246,7 +246,24 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.6) sepia(1) h
 .tabbtn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:700;font-family:'Inter',sans-serif;transition:all .2s}
 .togbtn{width:34px;height:28px;border-radius:7px;border:none;cursor:pointer;font-size:13px;font-weight:900;font-family:'Inter',sans-serif;transition:all .18s;display:flex;align-items:center;justify-content:center}
 .spinner{width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--a1);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+@media(max-width:768px){
+  body{overflow:auto}
+  aside.sb{display:none!important}
+  nav.mobnav{display:flex!important}
+  main.mc{height:calc(100vh - 60px)!important}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
+  .page-wrap{padding:1rem!important}
+  .tbl-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
+  .modal-overlay{align-items:flex-end!important;padding:0!important}
+  .modal-box{border-radius:20px 20px 0 0!important;max-height:92vh!important}
+  .filt-row{flex-wrap:wrap!important}
+  .filt-row>*{min-width:calc(50% - 4px)!important;flex:1 1 calc(50% - 4px)!important}
+  h1.ptitle{font-size:20px!important}
+  .toast-pos{bottom:68px!important;right:12px!important;left:12px!important;text-align:center}
+}
+nav.mobnav{display:none}
 `;
+
 
 function Av({ n, c, color, size=34 }) {
   return (
@@ -805,14 +822,15 @@ export default function App() {
     </div>
   );
 
+
   return (
-    <div style={{display:"flex",height:"100vh",width:"100vw",overflow:"hidden",background:"var(--bg)"}}>
-      {toast && <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,background:toast.color,color:"#fff",padding:"12px 22px",borderRadius:12,fontWeight:700,fontSize:13,boxShadow:"0 8px 30px #00000060",animation:"fadeIn .25s ease"}}>{toast.msg}</div>}
+    <div style={{display:"flex",flexDirection:"row",height:"100vh",width:"100vw",overflow:"hidden",background:"var(--bg)"}}>
+      {toast && <div className="toast-pos" style={{position:"fixed",bottom:24,right:24,zIndex:9999,background:toast.color,color:"#fff",padding:"12px 22px",borderRadius:12,fontWeight:700,fontSize:13,boxShadow:"0 8px 30px #00000060",animation:"fadeIn .25s ease"}}>{toast.msg}</div>}
       {saving && <div style={{position:"fixed",top:14,right:14,zIndex:9998,background:"var(--bg4)",border:"1px solid var(--border2)",borderRadius:9,padding:"7px 14px",fontSize:12,color:"var(--a2)",display:"flex",alignItems:"center",gap:7}}><span className="spinner" />Salvataggio...</div>}
 
       <Sidebar view={view} setView={setView} data={data} urgenti={urgenti} onAdd={openAdd} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downline.length} sidebarMode={sidebarMode} setSidebarMode={setSidebarMode} />
 
-      <main style={{flex:1,overflowY:"auto",height:"100vh"}}>
+      <main className="mc" style={{flex:1,overflowY:"auto",height:"100vh",paddingBottom:0}}>
         {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} />}
         {view==="lista" && <Lista prospects={listaData} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={setListaMode} hasTeam={dlProspects.length>0} />}
         {view==="stats"   && <Statistiche data={data} dlProspects={dlProspects} />}
@@ -821,9 +839,33 @@ export default function App() {
         {view==="profilo" && <ProfiloView auth={auth} onUpdateProfile={updateProfile} downlineCount={downline.length} showToast={showToast} />}
       </main>
 
+      {/* Mobile bottom nav - shown via CSS on mobile only */}
+      <nav className="mobnav" style={{position:"fixed",bottom:0,left:0,right:0,height:60,background:"var(--bg2)",borderTop:"1px solid var(--border)",alignItems:"center",justifyContent:"space-around",zIndex:500,padding:"0 4px"}}>
+        {[
+          {id:"dash",label:"Home"},
+          {id:"lista",label:"Prospect",badge:data.length},
+          {id:"team",label:"Team",badge:downline.length||0},
+          {id:"nomi",label:"Lista"},
+          {id:"profilo",label:"Profilo"},
+        ].map(item=>{
+          const active=view===item.id;
+          return (
+            <button key={item.id} onClick={()=>setView(item.id)}
+              style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"none",border:"none",cursor:"pointer",padding:"6px 2px",position:"relative"}}>
+              {item.badge>0&&<span style={{position:"absolute",top:2,right:"18%",background:"#10b981",color:"#fff",borderRadius:99,fontSize:9,fontWeight:900,padding:"1px 5px",minWidth:16,textAlign:"center"}}>{item.badge}</span>}
+              <div style={{width:5,height:5,borderRadius:"50%",background:active?"var(--a1)":"transparent",marginBottom:1}}/>
+              <span style={{fontSize:10,fontWeight:active?800:600,color:active?"var(--a1)":"var(--muted)"}}>{item.label}</span>
+            </button>
+          );
+        })}
+        <button onClick={openAdd} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"none",border:"none",cursor:"pointer",padding:"6px 2px"}}>
+          <div style={{width:30,height:30,borderRadius:"50%",background:"linear-gradient(135deg,var(--a1),var(--a2))",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:18,fontWeight:900}}>+</div>
+        </button>
+      </nav>
+
       {modal && (
         <div onClick={closeModal} style={{position:"fixed",inset:0,background:"#00000090",backdropFilter:"blur(8px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16,animation:"fadeIn .2s"}}>
-          <div className="pop" onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520}}>
+          <div className={"pop"} onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520,maxHeight:"90vh",overflowY:"auto",borderRadius:"16px"}}>
             {modal==="detail"
               ? <DetailModal p={sel} onEdit={()=>{setForm({...sel});setModal("edit");}} onAdvance={()=>advanceFase(sel)} onFollowUp={()=>moveFase(sel,"FOLLOW_UP")} onNonInt={()=>moveFase(sel,"NON_INT")} onRiattiva={()=>moveFase(sel,"RIATTIVA")} onClose={closeModal} onUpdateProfilo={pr=>updateProfilo(sel.id,pr)} onUpdateChecklist={cl=>updateChecklist(sel.id,cl)} onDeleteStorico={fase=>deleteStorico(sel.id,fase)} onUpdateStoricoData={(fase,data,newFase,newStorico)=>updateStoricoData(sel.id,fase,data,newFase,newStorico)} />
               : <FormModal form={form} setForm={setForm} onSave={saveForm} onClose={closeModal} onDelete={modal==="edit"?()=>deleteProp(form.id):null} isEdit={modal==="edit"} />
@@ -846,7 +888,7 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
     { id:"profilo", icon:"", label:"Profilo" },
   ];
   return (
-    <aside style={{width:222,minWidth:222,background:"var(--bg2)",borderRight:"1px solid #11203a",padding:"1.5rem .9rem",display:"flex",flexDirection:"column",gap:4,height:"100vh",overflowY:"auto"}}>
+    <aside className="sb" style={{width:222,minWidth:222,background:"var(--bg2)",borderRight:"1px solid #11203a",padding:"1.5rem .9rem",display:"flex",flexDirection:"column",gap:4,height:"100vh",overflowY:"auto"}}>
       <div style={{marginBottom:24,paddingLeft:4}}>
         <div style={{fontWeight:900,fontSize:15,color:"var(--text)",lineHeight:1.2}}>BE Club CRM</div>
       </div>
@@ -921,7 +963,7 @@ function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, totSub, totConv, totAll, f
   ];
   return (
     <div style={{padding:"2rem 2.2rem",maxWidth:1280,margin:"0 auto"}}>
-      <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:"1.5rem",gap:12,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:"1.2rem",gap:12,flexWrap:"wrap"}}>
         <div>
           <div style={{fontSize:11,fontWeight:700,color:"var(--a1)",textTransform:"uppercase",letterSpacing:1.4,marginBottom:4}}>Ciclo {dashCiclo}{dashCiclo===CICLO_CORRENTE?" \u00b7 in corso":""}</div>
           <h1 style={{fontWeight:900,fontSize:26,color:"var(--text)",letterSpacing:-0.8,lineHeight:1}}>Dashboard</h1>
@@ -949,7 +991,7 @@ function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, totSub, totConv, totAll, f
           </div>
         </div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
+      <div className="kpi-grid" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
         {kpis.map((k,i)=>(
           <div key={i} className="kpi" style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,"+k.color+","+k.color+"44)",borderRadius:"14px 14px 0 0"}} />
@@ -1137,8 +1179,8 @@ function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, s
       </div>
       {prospects.length===0
         ?<div style={{textAlign:"center",padding:"4rem",color:"var(--border2)"}}><div style={{fontSize:44,marginBottom:12}}></div><p style={{fontSize:14,marginBottom:14}}>Nessun prospect trovato</p><button onClick={onAdd} style={{padding:"9px 20px",fontSize:13,fontWeight:800,background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:10,cursor:"pointer"}}>Aggiungi il primo</button></div>
-        :<div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
+        :<div className="tbl-wrap" style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:700}}>
             <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Prospect",...(listaMode==="team"?["Di"]:[]),"Ciclo","Conosciuto","Fonte","Fase","Interesse","Checklist","Profilo","Pers.",""].map(h=>(<th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",letterSpacing:.8,padding:"12px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
             <tbody>{prospects.map(p=>{
               const c=cicloOfDate(p.conosciutoAt);
