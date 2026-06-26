@@ -273,7 +273,7 @@ function AuthScreen({ onAuth }) {
     if (ref) {
       // Salva ref con timestamp — scade dopo 30 minuti
       localStorage.setItem("pending_ref", ref);
-      localStorage.setItem("pending_ref_expires", Date.now() + 30 * 60 * 1000);
+      localStorage.setItem("pending_ref_expires", Date.now() + 10 * 60 * 1000);
       setMode("signup");
     }
 
