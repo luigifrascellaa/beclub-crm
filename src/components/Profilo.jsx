@@ -44,9 +44,18 @@ export function ProfiloView({ auth, onUpdateProfile, downlineCount }) {
   const [telefono,  setTelefono]  = useState(p.telefono || "");
   const [instagram, setInstagram] = useState(p.instagram || "");
   const [sponsorId, setSponsorId] = useState("");
+  const [sponsorName, setSponsorName] = useState(null);
   const [saving,    setSaving]    = useState(false);
   const [savingSponsor, setSavingSponsor] = useState(false);
   const [msg, setMsg] = useState(null);
+
+  // Carica nome sponsor attuale
+  useState(() => {
+    if (!p.upline_id || !auth.token) return;
+    sbFetch(`/rest/v1/profiles?select=nome,cognome&id=eq.${p.upline_id}`, { _token: auth.token })
+      .then(rows => { if (rows?.[0]) setSponsorName((rows[0].nome||"")+" "+(rows[0].cognome||"")); })
+      .catch(()=>{});
+  }, [p.upline_id]);
 
   function showMsg(text, color = "#22d3ee") {
     setMsg({ text, color });
@@ -147,7 +156,24 @@ export function ProfiloView({ auth, onUpdateProfile, downlineCount }) {
       </div>
 
       <div style={{ background: "var(--bg2)", border: "1px solid #1e3a5f", borderRadius: 14, padding: "1.4rem" }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 4 }}>Il tuo sponsor</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 12 }}>Il tuo sponsor</div>
+        {sponsorName && (
+          <div style={{ display:"flex", alignItems:"center", gap:10, background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:10, padding:"10px 14px", marginBottom:14 }}>
+            <div style={{ width:32, height:32, borderRadius:"50%", background:"linear-gradient(135deg,var(--a1),var(--a2))", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:900, fontSize:13, flexShrink:0 }}>
+              {sponsorName.trim()[0]||"?"}
+            </div>
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:.8 }}>Sponsor attuale</div>
+              <div style={{ fontSize:13, fontWeight:800, color:"var(--text)", marginTop:1 }}>{sponsorName.trim()}</div>
+            </div>
+          </div>
+        )}
+        {!sponsorName && p.upline_id && (
+          <div style={{ fontSize:12, color:"var(--muted)", marginBottom:14 }}>Caricamento sponsor...</div>
+        )}
+        {!p.upline_id && (
+          <div style={{ fontSize:12, color:"var(--muted)", marginBottom:14 }}>Nessuno sponsor collegato</div>
+        )}
         {downlineCount > 0 ? (
           <>
             <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 12, lineHeight: 1.6 }}>
