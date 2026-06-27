@@ -91,8 +91,8 @@ function bvOfPacchetto(key, bvCustom) {
   return p?p.bv:0;
 }
 
-const FASI_FUNNEL   = ["INVITO","FUP1","FUP2","PACK","CLOSING","SUB"];
-const FASI_DASH     = ["FUP1","FUP2","PACK","CLOSING","SUB"];
+const FASI_FUNNEL   = ["INVITO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
+const FASI_DASH     = ["CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
 const FASI_SPECIALI = ["FOLLOW_UP","NON_INT"];
 const FASI          = [...FASI_FUNNEL, ...FASI_SPECIALI];
 const FONTI         = ["Instagram","TikTok","Offline","Referenza","Lista Nomi"];
@@ -101,11 +101,11 @@ const INTERESSE     = ["Alto","Medio","Basso"];
 const INTERESSE_CLR = { Alto:"#10b981", Medio:"#f59e0b", Basso:"#ef4444" };
 
 const FASE_CLR = {
-  INVITO:"#8b5cf6", FUP1:"var(--a1)", FUP2:"#3b82f6", PACK:"var(--a2)",
+  INVITO:"#8b5cf6", CONOSCITIVA:"#7c3aed", FUP1:"var(--a1)", FUP2:"#3b82f6", PACK:"var(--a2)",
   CLOSING:"#22d3ee", SUB:"#10b981", FOLLOW_UP:"#f59e0b", NON_INT:"#6b7280",
 };
 const FASE_LABEL = {
-  INVITO:"Invito", FUP1:"FUP 1", FUP2:"FUP 2", PACK:"Pack",
+  INVITO:"Invito", CONOSCITIVA:"Conoscitiva", FUP1:"FUP 1", FUP2:"FUP 2", PACK:"Pack",
   CLOSING:"Closing", SUB:"Iscritto", FOLLOW_UP:"Follow Up", NON_INT:"Non Int.",
 };
 
@@ -199,7 +199,7 @@ const fmt = d => d ? new Date(d+"T12:00:00").toLocaleDateString("it-IT") : "\u20
 function teamStats(prospects) {
   const total = prospects.length;
   const sub   = prospects.filter(p=>p.fase==="SUB").length;
-  const act   = prospects.filter(p=>["FUP1","FUP2","PACK","CLOSING"].includes(p.fase)).length;
+  const act   = prospects.filter(p=>["CONOSCITIVA","FUP1","FUP2","PACK","CLOSING"].includes(p.fase)).length;
   const conv  = total>0 ? Math.round(sub/total*100) : 0;
   const bv    = prospects.filter(p=>p.fase==="SUB").reduce((acc,p)=>acc+bvOfPacchetto(p.pacchetto,p.bvCustom),0);
   return { total, sub, act, conv, bv };
@@ -656,7 +656,7 @@ export default function App() {
     const ownerId=p._userId||auth.userId;
     const newStorico = p.storico.filter(s=>s.fase!==faseToRemove);
     // Calcola la nuova fase (l'ultima rimasta nello storico)
-    const FASI_ORDER = ["INVITO","FUP1","FUP2","PACK","CLOSING","SUB","FOLLOW_UP","NON_INT"];
+    const FASI_ORDER = ["INVITO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB","FOLLOW_UP","NON_INT"];
     const lastFase = newStorico.reduce((best, s) => {
       const bi = FASI_ORDER.indexOf(best);
       const si = FASI_ORDER.indexOf(s.fase);
@@ -793,7 +793,7 @@ export default function App() {
 
   const cd    = dataByCiclo(dashData, dashCiclo);
   const cdSub = cd.filter(p=>p.fase==="SUB");
-  const cdAct = cd.filter(p=>["FUP1","FUP2","PACK","CLOSING"].includes(p.fase));
+  const cdAct = cd.filter(p=>["CONOSCITIVA","FUP1","FUP2","PACK","CLOSING"].includes(p.fase));
   const cdFU  = cd.filter(p=>p.fase==="FOLLOW_UP");
   const cdNI  = cd.filter(p=>p.fase==="NON_INT");
   const cdConv= cd.length?Math.round(cdSub.length/cd.length*100):0;
@@ -1088,7 +1088,7 @@ function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, totSub, totConv, totAll, f
 
 //  STATISTICHE 
 function Statistiche({ data, dlProspects }) {
-  const [linePhase, setLinePhase] = useState("FUP1");
+  const [linePhase, setLinePhase] = useState("CONOSCITIVA");
   const [barCiclo,  setBarCiclo]  = useState("ALL");
   const [statsMode, setStatsMode] = useState("personale");
 
@@ -1447,7 +1447,7 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onRiattiva, o
                       onUpdateStoricoData(stepPopup,stepDate);
                     } else {
                       // Aggiungi la fase allo storico e aggiorna la fase se necessaria
-                      const FASI_ORDER=["INVITO","FUP1","FUP2","PACK","CLOSING","SUB"];
+                      const FASI_ORDER=["INVITO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
                       const currentIdx=FASI_ORDER.indexOf(p.fase);
                       const newIdx=FASI_ORDER.indexOf(stepPopup);
                       const newFase=newIdx>currentIdx?stepPopup:p.fase;
