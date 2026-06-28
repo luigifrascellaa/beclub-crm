@@ -1041,7 +1041,7 @@ function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, totSub, totConv, totAll, f
                   <div key={f} style={{display:"flex",alignItems:"center",gap:11}}>
                     <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:6,padding:"3px 9px",fontSize:10,fontWeight:700,color:"#fff",background:FASE_CLR[f],minWidth:68,boxShadow:"0 0 10px "+FASE_CLR[f]+"35"}}>{FASE_LABEL[f]}</span>
                     <div style={{flex:1,height:9,background:"var(--bg4)",borderRadius:99,overflow:"hidden"}}>
-                      <div className="bar" style={{"--w":w,width:w,height:"100%",background:"linear-gradient(90deg,"+FASE_CLR[f]+"88,"+FASE_CLR[f]+")",boxShadow:"0 0 8px "+FASE_CLR[f]+"50"}} />
+                      <div style={{width:w,height:"100%",background:"linear-gradient(90deg,"+FASE_CLR[f]+"88,"+FASE_CLR[f]+")",boxShadow:"0 0 8px "+FASE_CLR[f]+"50",borderRadius:99,transition:"width .6s cubic-bezier(.4,0,.2,1)"}} />
                     </div>
                     <span style={{fontWeight:800,color:"var(--text)",minWidth:16,textAlign:"right",fontSize:13}}>{n}</span>
                     <span style={{color:"var(--muted)",fontSize:11,minWidth:30,textAlign:"right"}}>{pct}%</span>
