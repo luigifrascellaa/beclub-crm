@@ -182,8 +182,25 @@ function buildStorico(prospect, fase, dateForFase) {
   }
   return storico.sort((a,b)=>FASI_FUNNEL.indexOf(a.fase)-FASI_FUNNEL.indexOf(b.fase));
 }
-function reachedEver(p,fase)       { return (p.storico||[]).some(s=>s.fase===fase); }
-function reachedInCiclo(p,fase,c)  { const e=(p.storico||[]).find(s=>s.fase===fase); return e?cicloOfDate(e.data)===Number(c):false; }
+function reachedInCiclo(p,fase,c) {
+  const storico = p.storico||[];
+  const e = storico.find(s=>s.fase===fase);
+  if (e) return cicloOfDate(e.data)===Number(c);
+  // Se CONOSCITIVA non c'è ma FUP1 sì, considera CONOSCITIVA raggiunta con FUP1
+  if (fase==="CONOSCITIVA") {
+    const fup1 = storico.find(s=>s.fase==="FUP1");
+    if (fup1) return cicloOfDate(fup1.data)===Number(c);
+  }
+  return false;
+}
+
+function reachedEver(p,fase) {
+  const storico = p.storico||[];
+  if (storico.some(s=>s.fase===fase)) return true;
+  // Se CONOSCITIVA non c'è ma FUP1 sì, considera raggiunta
+  if (fase==="CONOSCITIVA") return storico.some(s=>s.fase==="FUP1");
+  return false;
+}
 function highestReached(p) {
   let best=null,bi=-1;
   (p.storico||[]).forEach(s=>{const i=FASI_FUNNEL.indexOf(s.fase);if(i>bi){bi=i;best=s.fase;}});
