@@ -101,7 +101,7 @@ const INTERESSE     = ["Alto","Medio","Basso"];
 const INTERESSE_CLR = { Alto:"#10b981", Medio:"#f59e0b", Basso:"#ef4444" };
 
 const FASE_CLR = {
-  INVITO:"#8b5cf6", CONOSCITIVA:"#7c3aed", FUP1:"var(--a1)", FUP2:"#3b82f6", PACK:"var(--a2)",
+  INVITO:"#8b5cf6", CONOSCITIVA:"#7c3aed", FUP1:"#2563eb", FUP2:"#3b82f6", PACK:"var(--a2)",
   CLOSING:"#22d3ee", SUB:"#10b981", FOLLOW_UP:"#f59e0b", NON_INT:"#6b7280",
 };
 const FASE_LABEL = {
