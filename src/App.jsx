@@ -818,7 +818,7 @@ export default function App() {
   const totConv = dashData.length?Math.round(totSub/dashData.length*100):0;
   const urgenti = data.filter(p=>(isOver(p.followUp)||isToday(p.followUp))&&p.fase!=="NON_INT");
   const funnelCounts=FASI_DASH.map(f=>({f,n:cd.filter(p=>p.fase===f).length}));
-  const funnelMax=Math.max(...funnelCounts.map(x=>x.n),1);
+  const funnelMax=Math.max(cd.length,1);
 
   // Prospect del team con owner name
   const teamProspects = dlProspects.map(p => {
