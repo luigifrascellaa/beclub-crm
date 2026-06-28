@@ -1093,7 +1093,6 @@ function Statistiche({ data, dlProspects }) {
   const [linePhase, setLinePhase] = useState("CONOSCITIVA");
   const [barCiclo,  setBarCiclo]  = useState("ALL");
 
-  const hasTeam = dlProspects && dlProspects.length > 0;
   const activeData = statsMode === "team" ? [...data, ...(dlProspects||[])] : data;
 
   const cicliPresenti=[...new Set(activeData.flatMap(p=>(p.storico||[]).map(s=>cicloOfDate(s.data)).filter(Boolean)))].sort((a,b)=>a-b);
