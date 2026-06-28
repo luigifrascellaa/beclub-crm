@@ -4,8 +4,12 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 const FASI_DASH = ["FUP1","FUP2","PACK","CLOSING","SUB"];
 const FASE_CLR = {INVITO:"#8b5cf6",FUP1:"var(--a1)",FUP2:"#3b82f6",PACK:"var(--a2)",CLOSING:"#22d3ee",SUB:"#10b981",FOLLOW_UP:"#f59e0b",NON_INT:"#6b7280"};
 const FASE_LABEL = {INVITO:"Invito",FUP1:"FUP 1",FUP2:"FUP 2",PACK:"Pack",CLOSING:"Closing",SUB:"Iscritto",FOLLOW_UP:"Follow Up",NON_INT:"Non Int."};
-const PACCHETTI = [{key:"starter",label:"Starter",bv:100},{key:"standard",label:"Standard",bv:250},{key:"premium",label:"Premium",bv:550},{key:"signature",label:"Signature",bv:1025}];
-function bvOfPacchetto(key){const p=PACCHETTI.find(x=>x.key===key);return p?p.bv:0;}
+const PACCHETTI = [{key:"starter",label:"Starter",bv:100},{key:"standard",label:"Standard",bv:250},{key:"premium",label:"Premium",bv:550},{key:"signature",label:"Signature",bv:1025},{key:"altro",label:"Altro",bv:0}];
+function bvOfPacchetto(key, bvCustom){
+  if(key==="altro") return bvCustom||0;
+  const p=PACCHETTI.find(x=>x.key===key);
+  return p?p.bv:0;
+}
 
 const CICLI=[[73,"2026-01-03","2026-01-31"],[74,"2026-01-31","2026-02-28"],[75,"2026-02-28","2026-03-28"],[76,"2026-03-28","2026-04-25"],[77,"2026-04-25","2026-05-23"],[78,"2026-05-23","2026-06-20"],[79,"2026-06-20","2026-07-18"],[80,"2026-07-18","2026-08-15"],[81,"2026-08-15","2026-09-12"],[82,"2026-09-12","2026-10-10"],[83,"2026-10-10","2026-11-07"],[84,"2026-11-07","2026-12-05"],[85,"2026-12-05","2027-01-02"]];
 const CICLO_CORRENTE=(()=>{const t=new Date().toISOString().split("T")[0];for(const[c,s,e]of CICLI)if(t>=s&&t<e)return c;return CICLI[CICLI.length-1][0];})();
@@ -20,7 +24,7 @@ function teamStats(prospects){
   const sub=prospects.filter(p=>p.fase==="SUB").length;
   const act=prospects.filter(p=>["FUP1","FUP2","PACK","CLOSING"].includes(p.fase)).length;
   const conv=total>0?Math.round(sub/total*100):0;
-  const bv=prospects.filter(p=>p.fase==="SUB").reduce((acc,p)=>acc+bvOfPacchetto(p.pacchetto),0);
+  const bv=prospects.filter(p=>p.fase==="SUB").reduce((acc,p)=>acc+bvOfPacchetto(p.pacchetto,p.bvCustom),0);
   return{total,sub,act,conv,bv};
 }
 
