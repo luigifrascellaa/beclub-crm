@@ -95,8 +95,8 @@ const FASI_FUNNEL   = ["INVITO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SU
 const FASI_DASH     = ["CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
 const FASI_SPECIALI = ["FOLLOW_UP","NON_INT"];
 const FASI          = [...FASI_FUNNEL, ...FASI_SPECIALI];
-const FONTI         = ["Instagram","TikTok","Offline","Referenza","Lista Nomi"];
-const FONTE_ICO     = { Instagram:"", TikTok:"", Offline:"", Referenza:"", "Lista Nomi":"" };
+const FONTI         = ["Instagram","TikTok","Offline","Referenza","Lista Nomi","Modulo"];
+const FONTE_ICO     = { Instagram:"", TikTok:"", Offline:"", Referenza:"", "Lista Nomi":"", Modulo:"" };
 const INTERESSE     = ["Alto","Medio","Basso"];
 const INTERESSE_CLR = { Alto:"#10b981", Medio:"#f59e0b", Basso:"#ef4444" };
 
