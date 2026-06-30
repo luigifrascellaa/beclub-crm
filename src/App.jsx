@@ -490,9 +490,15 @@ export default function App() {
   },[auth?.profile?.tema]);
 
   useEffect(()=>{
-    if (!auth) return;
-    setShowEventoReminder(true);
-  },[auth?.userId]);
+    if (!auth?.token) return;
+    // Mostra il reminder solo se questo token (cioe' questa specifica sessione/login)
+    // non l'ha gia' fatto vedere. Sopravvive ai reload finche' la sessione resta valida.
+    const lastShownFor = localStorage.getItem("evento_reminder_token");
+    if (lastShownFor !== auth.token) {
+      setShowEventoReminder(true);
+      localStorage.setItem("evento_reminder_token", auth.token);
+    }
+  },[auth?.token]);
 
   useEffect(()=>{
     if (!auth) { setData([]); setReady(true); return; }

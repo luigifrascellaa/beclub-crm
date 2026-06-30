@@ -236,6 +236,10 @@ export function EventiView({ auth, allProfiles, downline, showToast,
           stato: form.stato, venduto_at: form.stato === "venduto" ? new Date().toISOString() : null,
         });
         setPersone(ps => ps.map(p => p.id === form.id ? { ...p, ...form } : p));
+        setTuttiVenduti(tv => {
+          const senzaQuesta = tv.filter(p => p.id !== form.id);
+          return form.stato === "venduto" ? [...senzaQuesta, { ...form }] : senzaQuesta;
+        });
         showToast(form.stato === "venduto" ? "Segnato come venduto" : "Aggiornato");
       } else {
         const row = await sbInsertEventoPersona(auth.token, {
@@ -246,6 +250,7 @@ export function EventiView({ auth, allProfiles, downline, showToast,
         });
         const created = Array.isArray(row) ? row[0] : row;
         setPersone(ps => [...ps, created]);
+        if (created.stato === "venduto") setTuttiVenduti(tv => [...tv, created]);
         showToast("Aggiunto");
       }
     } catch (e) { showToast("Errore: " + e.message, "#ef4444"); }
