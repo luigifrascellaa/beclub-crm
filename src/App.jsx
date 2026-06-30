@@ -872,7 +872,7 @@ export default function App() {
         {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} />}
         {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} />}
         {view==="eventi"  && <EventiView auth={auth} allProfiles={allProfiles} downline={downline} showToast={showToast}
-          sbListEventi={sbListEventi} sbInsertEvento={sbInsertEvento} sbDeleteEvento={sbDeleteEvento}
+          sbListEventi={sbListEventi}
           sbListEventoPersone={sbListEventoPersone} sbInsertEventoPersona={sbInsertEventoPersona}
           sbUpdateEventoPersona={sbUpdateEventoPersona} sbDeleteEventoPersona={sbDeleteEventoPersona}
           LUDOVICO_ID={LUDOVICO_ID} />}

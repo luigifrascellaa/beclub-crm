@@ -124,7 +124,7 @@ function Leaderboard({ ranking }) {
 }
 
 export function EventiView({ auth, allProfiles, downline, showToast,
-  sbListEventi, sbInsertEvento, sbDeleteEvento,
+  sbListEventi,
   sbListEventoPersone, sbInsertEventoPersona, sbUpdateEventoPersona, sbDeleteEventoPersona,
   LUDOVICO_ID }) {
 
@@ -133,9 +133,6 @@ export function EventiView({ auth, allProfiles, downline, showToast,
   const [persone, setPersone] = useState([]); // persone dell'evento attivo (tutte quelle leggibili)
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null); // { mode: 'in_ballo'|'venduto', persona }
-  const [showNuovoEvento, setShowNuovoEvento] = useState(false);
-  const [nuovoNome, setNuovoNome] = useState("");
-  const [nuovaData, setNuovaData] = useState("");
 
   useEffect(() => {
     if (!auth) return;
@@ -224,19 +221,6 @@ export function EventiView({ auth, allProfiles, downline, showToast,
     [eventi, vendutiPerEvento]
   );
 
-  async function creaEvento() {
-    if (!nuovoNome.trim() || !nuovaData) { showToast("Nome e data sono obbligatori", "#ef4444"); return; }
-    try {
-      const row = await sbInsertEvento(auth.token, { nome: nuovoNome.trim(), data: nuovaData, created_by: auth.userId });
-      const created = Array.isArray(row) ? row[0] : row;
-      setEventi(e => [created, ...e]);
-      setEventoAttivo(created.id);
-      setShowNuovoEvento(false);
-      setNuovoNome(""); setNuovaData("");
-      showToast("Evento creato");
-    } catch (e) { showToast("Errore: " + e.message, "#ef4444"); }
-  }
-
   async function salvaPersona(form) {
     try {
       if (form.id) {
@@ -275,14 +259,9 @@ export function EventiView({ auth, allProfiles, downline, showToast,
 
   return (
     <div style={{ padding: "2rem 2.2rem", maxWidth: 1280, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: "1.4rem", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ fontWeight: 900, fontSize: 26, color: "var(--text)", letterSpacing: -0.8 }}>Eventi</h1>
-          <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 4 }}>Ticket, leaderboard e andamento del team</p>
-        </div>
-        <button onClick={() => setShowNuovoEvento(true)} style={{ padding: "9px 18px", fontSize: 13, fontWeight: 800, background: "linear-gradient(135deg,var(--a1),var(--a2))", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer" }}>
-          + Nuovo evento
-        </button>
+      <div style={{ marginBottom: "1.4rem" }}>
+        <h1 style={{ fontWeight: 900, fontSize: 26, color: "var(--text)", letterSpacing: -0.8 }}>Eventi</h1>
+        <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 4 }}>Ticket, leaderboard e andamento del team</p>
       </div>
 
       {/* Leaderboard */}
@@ -295,7 +274,7 @@ export function EventiView({ auth, allProfiles, downline, showToast,
 
       {eventi.length === 0 && !loading ? (
         <div style={{ textAlign: "center", padding: "3rem", color: "var(--border2)" }}>
-          Nessun evento creato. Crea il primo evento per iniziare a tracciare i ticket.
+          Nessun evento disponibile al momento.
         </div>
       ) : (
         <>
@@ -370,22 +349,6 @@ export function EventiView({ auth, allProfiles, downline, showToast,
               onClose={() => setModal(null)}
               onDelete={modal.persona ? () => eliminaPersona(modal.persona.id) : null}
             />
-          </div>
-        </div>
-      )}
-
-      {showNuovoEvento && (
-        <div onClick={() => setShowNuovoEvento(false)} style={{ position: "fixed", inset: 0, background: "#00000090", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 380, background: "var(--bg2)", border: "1px solid var(--border2)", borderRadius: 16, padding: "1.6rem" }}>
-            <h2 style={{ fontWeight: 900, fontSize: 16, color: "var(--text)", marginBottom: 16 }}>Nuovo evento</h2>
-            <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: .8, marginBottom: 5, display: "block" }}>Nome evento</label>
-            <input value={nuovoNome} onChange={e => setNuovoNome(e.target.value)} placeholder="es. THE MASTERY" style={{ marginBottom: 14 }} />
-            <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: .8, marginBottom: 5, display: "block" }}>Data</label>
-            <input type="date" value={nuovaData} onChange={e => setNuovaData(e.target.value)} style={{ marginBottom: 18 }} />
-            <div style={{ display: "flex", gap: 9, justifyContent: "flex-end" }}>
-              <button onClick={() => setShowNuovoEvento(false)} style={{ padding: "9px 14px", background: "var(--bg3)", color: "var(--a2)", border: "1px solid var(--border2)", borderRadius: 9, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>Annulla</button>
-              <button onClick={creaEvento} style={{ padding: "9px 20px", background: "linear-gradient(135deg,var(--a1),var(--a2))", color: "#fff", border: "none", borderRadius: 9, cursor: "pointer", fontWeight: 800, fontSize: 13 }}>Crea</button>
-            </div>
           </div>
         </div>
       )}
