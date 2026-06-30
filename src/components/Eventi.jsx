@@ -265,8 +265,14 @@ export function EventiView({ auth, allProfiles, downline, showToast,
 
   return (
     <div style={{ padding: "2rem 2.2rem", maxWidth: 1280, margin: "0 auto" }}>
-      <div style={{ marginBottom: "1.4rem" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.4rem", gap: 12, flexWrap: "wrap" }}>
         <h1 style={{ fontWeight: 900, fontSize: 26, color: "var(--text)", letterSpacing: -0.8 }}>Eventi</h1>
+        {eventoAttivo && (
+          <button onClick={() => setModal({ persona: null, stato: "in_ballo" })}
+            style={{ padding: "11px 22px", fontSize: 14, fontWeight: 800, background: "linear-gradient(135deg,var(--a1),var(--a2))", color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", boxShadow: "0 4px 14px var(--a1-25)" }}>
+            + Aggiungi persona
+          </button>
+        )}
       </div>
 
       {/* Leaderboard */}

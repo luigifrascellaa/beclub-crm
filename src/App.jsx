@@ -470,6 +470,7 @@ export default function App() {
   const [saving, setSaving]       = useState(false);
   const [downline, setDownline]   = useState([]);
   const [allProfiles, setAllProfiles] = useState([]);
+  const [showEventoReminder, setShowEventoReminder] = useState(false);
   const [dlProspects, setDlProspects] = useState([]);
   const [positions, setPositions] = useState([]);
   const [dashMode, setDashMode]   = useState("personale");
@@ -487,6 +488,11 @@ export default function App() {
   useEffect(()=>{
     if (auth?.profile?.tema) applyTema(auth.profile.tema);
   },[auth?.profile?.tema]);
+
+  useEffect(()=>{
+    if (!auth) return;
+    setShowEventoReminder(true);
+  },[auth?.userId]);
 
   useEffect(()=>{
     if (!auth) { setData([]); setReady(true); return; }
@@ -862,6 +868,24 @@ export default function App() {
     <div style={{display:"flex",flexDirection:"row",height:"100vh",width:"100vw",overflow:"hidden",background:"var(--bg)"}}>
       {toast && <div className="toast-pos" style={{position:"fixed",bottom:24,right:24,zIndex:9999,background:toast.color,color:"#fff",padding:"12px 22px",borderRadius:12,fontWeight:700,fontSize:13,boxShadow:"0 8px 30px #00000060",animation:"fadeIn .25s ease"}}>{toast.msg}</div>}
       {saving && <div style={{position:"fixed",top:14,right:14,zIndex:9998,background:"var(--bg4)",border:"1px solid var(--border2)",borderRadius:9,padding:"7px 14px",fontSize:12,color:"var(--a2)",display:"flex",alignItems:"center",gap:7}}><span className="spinner" />Salvataggio...</div>}
+
+      {showEventoReminder && (
+        <div style={{position:"fixed",inset:0,zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",background:"#00000080",backdropFilter:"blur(6px)",animation:"fadeIn .2s ease"}}
+          onClick={()=>setShowEventoReminder(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:"linear-gradient(160deg,var(--bg2),var(--bg3))",border:"1px solid var(--a1-25)",borderRadius:20,padding:"2.2rem 2rem",maxWidth:380,width:"90%",textAlign:"center",boxShadow:"0 20px 60px #000000a0"}}>
+            <button onClick={()=>setShowEventoReminder(false)}
+              style={{position:"absolute",top:14,right:14,background:"var(--bg4)",border:"1px solid var(--border2)",borderRadius:8,color:"var(--muted)",width:28,height:28,cursor:"pointer",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              X
+            </button>
+            <div style={{fontSize:36,marginBottom:10}}>{"\ud83d\udd25"}</div>
+            <div style={{fontSize:14,color:"var(--text)",fontWeight:600,lineHeight:1.5}}>
+              Hai parlato di<br/>
+              <span style={{display:"inline-block",fontSize:24,fontWeight:900,color:"var(--a2)",letterSpacing:-0.5,margin:"6px 0"}}>THE MASTERY</span><br/>
+              oggi?
+            </div>
+          </div>
+        </div>
+      )}
 
       <Sidebar view={view} setView={setView} data={data} urgenti={urgenti} onAdd={openAdd} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downline.length} sidebarMode={sidebarMode} setSidebarMode={setSidebarMode} />
 
