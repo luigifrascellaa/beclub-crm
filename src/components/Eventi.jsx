@@ -15,7 +15,7 @@ function fmtDate(d) {
 }
 
 // ===== card persona (in ballo o venduto) =====
-function PersonaCard({ p, ownerName, showOwner, onClick }) {
+function PersonaCard({ p, ownerName, showOwner, onClick, onMarkSold }) {
   return (
     <div onClick={onClick} className="hrow" style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, cursor: onClick ? "pointer" : "default", border: "1px solid var(--border)", background: "var(--bg3)" }}>
       <Av n={p.nome} c={p.cognome} color={p.stato === "venduto" ? "#10b981" : "#f59e0b"} size={32} />
@@ -26,6 +26,12 @@ function PersonaCard({ p, ownerName, showOwner, onClick }) {
           {p.telefono && <span>{"\u00b7"} {p.telefono}</span>}
         </div>
       </div>
+      {onMarkSold && (
+        <button onClick={e => { e.stopPropagation(); onMarkSold(); }}
+          style={{ padding: "5px 11px", fontSize: 11, fontWeight: 800, background: "#10b98118", color: "#10b981", border: "1px solid #10b98140", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+          Venduto
+        </button>
+      )}
       {showOwner && ownerName && (
         <div style={{ fontSize: 10, fontWeight: 700, color: "var(--a2)", background: "var(--a1-13)", borderRadius: 7, padding: "3px 8px", whiteSpace: "nowrap" }}>
           {ownerName}
@@ -327,7 +333,7 @@ export function EventiView({ auth, allProfiles, downline, showToast,
                 <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 420, overflowY: "auto" }}>
                   {inBallo.length === 0
                     ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>Nessuno al momento</div>
-                    : inBallo.map(p => <PersonaCard key={p.id} p={p} showOwner={false} onClick={() => setModal({ persona: p })} />)
+                    : inBallo.map(p => <PersonaCard key={p.id} p={p} showOwner={false} onClick={() => setModal({ persona: p })} onMarkSold={() => salvaPersona({ ...p, stato: "venduto" })} />)
                   }
                 </div>
               </div>
