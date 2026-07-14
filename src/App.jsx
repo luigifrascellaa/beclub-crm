@@ -1374,32 +1374,67 @@ function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, s
 // ── NOTA VOCALE ──────────────────────────────────────────────────
 function VoiceNoteBtn({ onResult }) {
   const [listening, setListening] = useState(false);
-  const [supported] = useState(()=>{
-    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-  });
-  const recRef = useRef(null);
+  const [supported] = useState(()=>!!(window.SpeechRecognition||window.webkitSpeechRecognition));
+  const recRef    = useRef(null);
+  const activeRef = useRef(false); // traccia se vogliamo ancora ascoltare
+  const accRef    = useRef("");    // accumula il testo finale
 
-  function toggle() {
-    if (!supported) { alert("Il tuo browser non supporta il riconoscimento vocale. Usa Chrome o Safari su iOS 16+."); return; }
-    if (listening) {
-      recRef.current?.stop();
-      setListening(false);
-      return;
-    }
+  function start() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SR();
     rec.lang = "it-IT";
-    rec.continuous = true;
+    rec.continuous = false;      // più compatibile su Safari/iOS
     rec.interimResults = true;
     recRef.current = rec;
+
     rec.onresult = e => {
-      const transcript = Array.from(e.results).map(r=>r[0].transcript).join(" ");
-      onResult(transcript);
+      let interim = "";
+      let final   = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final   += e.results[i][0].transcript;
+        else                       interim += e.results[i][0].transcript;
+      }
+      if (final)   accRef.current = (accRef.current + " " + final).trim();
+      // Mostra in tempo reale la combinazione di testo già confermato + quello in corso
+      onResult((accRef.current + (interim ? " " + interim : "")).trim());
     };
-    rec.onerror = () => setListening(false);
-    rec.onend = () => setListening(false);
+
+    rec.onerror = e => {
+      if (e.error === "no-speech") {
+        // nessun suono rilevato — riprova se siamo ancora in ascolto
+        if (activeRef.current) start();
+      } else {
+        activeRef.current = false;
+        setListening(false);
+      }
+    };
+
+    rec.onend = () => {
+      // Se l'utente non ha fermato manualmente, riavvia
+      if (activeRef.current) {
+        try { start(); } catch(_) { activeRef.current = false; setListening(false); }
+      }
+    };
+
     rec.start();
-    setListening(true);
+  }
+
+  function toggle() {
+    if (!supported) {
+      alert("Riconoscimento vocale non supportato. Usa Chrome o Safari su iOS 16+.");
+      return;
+    }
+    if (listening) {
+      activeRef.current = false;
+      recRef.current?.stop();
+      accRef.current = "";
+      setListening(false);
+    } else {
+      accRef.current = "";
+      activeRef.current = true;
+      setListening(true);
+      start();
+    }
   }
 
   if (!supported) return null;
@@ -1414,7 +1449,7 @@ function VoiceNoteBtn({ onResult }) {
         background: listening ? "#ef4444" : "var(--a1-18)",
         color: listening ? "#fff" : "var(--a2)",
         display:"flex", alignItems:"center", justifyContent:"center",
-        fontSize:14, transition:"all .2s",
+        fontSize:listening?12:14, transition:"all .2s",
         boxShadow: listening ? "0 0 0 4px #ef444430" : "none",
       }}>
       {listening ? "◼" : "🎤"}
