@@ -1036,6 +1036,54 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
 }
 
 //  DASHBOARD 
+function CicloCountdown({ ciclo }) {
+  const cicloData = CICLI.find(x=>x[0]===Number(ciclo));
+  const [tick, setTick] = useState(0);
+  useEffect(()=>{ const t=setInterval(()=>setTick(n=>n+1),1000); return ()=>clearInterval(t); },[]);
+
+  if (!cicloData) return null;
+
+  const start = new Date(cicloData[1]+"T06:00:00");
+  const end   = new Date(cicloData[2]+"T06:00:00");
+  const now   = new Date();
+  const totalMs = end - start;
+  const leftMs  = Math.max(0, end - now);
+  const pct     = Math.min(100, Math.max(0, ((now - start) / totalMs) * 100));
+  const giornoTot = Math.ceil(totalMs / 86400000);
+  const giornoOra = Math.min(giornoTot, Math.ceil((now - start) / 86400000));
+
+  const dd = String(Math.floor(leftMs/86400000)).padStart(2,"0");
+  const hh = String(Math.floor((leftMs%86400000)/3600000)).padStart(2,"0");
+  const mm = String(Math.floor((leftMs%3600000)/60000)).padStart(2,"0");
+  const ss = String(Math.floor((leftMs%60000)/1000)).padStart(2,"0");
+
+  const ended = leftMs === 0;
+  const endLabel = end.toLocaleDateString("it-IT",{weekday:"long",day:"numeric",month:"long"})+" alle ore 06:00";
+
+  return (
+    <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,padding:"16px 22px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
+      <div style={{flex:1,minWidth:180}}>
+        <div style={{fontSize:10,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Chiusura ciclo</div>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--text)",marginBottom:10}}>{ended?"Ciclo terminato":endLabel}</div>
+        <div style={{height:6,background:"var(--bg4)",borderRadius:99,overflow:"hidden"}}>
+          <div style={{height:"100%",width:pct+"%",background:"linear-gradient(90deg,var(--a1),var(--a2))",borderRadius:99,transition:"width .5s ease"}} />
+        </div>
+        <div style={{fontSize:11,color:"var(--muted)",marginTop:5}}>Giorno {giornoOra} di {giornoTot}</div>
+      </div>
+      {!ended && (
+        <div style={{display:"flex",gap:10,flexShrink:0}}>
+          {[{v:dd,l:"GIORNI"},{v:hh,l:"ORE"},{v:mm,l:"MIN"},{v:ss,l:"SEC"}].map(({v,l})=>(
+            <div key={l} style={{textAlign:"center"}}>
+              <div style={{fontSize:28,fontWeight:900,color:"var(--text)",letterSpacing:-1,lineHeight:1,fontVariantNumeric:"tabular-nums"}}>{v}</div>
+              <div style={{fontSize:9,fontWeight:700,color:"var(--muted)",letterSpacing:1.2,marginTop:3}}>{l}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, totSub, totConv, totAll, funnelCounts, funnelMax, urgenti, dashCiclo, setDashCiclo, onOpen, dashMode, setDashMode, hasTeam, ticketVenduti }) {
   const cc = v => v>=20?"#10b981":v>=10?"var(--a2)":"#f59e0b";
   const bvCiclo = cdSub.reduce((acc,p)=>acc+bvOfPacchetto(p.pacchetto,p.bvCustom),0);
@@ -1076,6 +1124,7 @@ function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, totSub, totConv, totAll, f
           </div>
         </div>
       </div>
+      <CicloCountdown ciclo={dashCiclo} />
       <div className="kpi-grid" style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:16}}>
         {kpis.map((k,i)=>(
           <div key={i} className="kpi" style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
