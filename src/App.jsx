@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell, PieChart, Pie } from "recharts";
 import { TeamView } from "./components/Team";
 import { ProfiloView } from "./components/Profilo";
@@ -950,7 +950,7 @@ export default function App() {
         <div onClick={closeModal} style={{position:"fixed",inset:0,background:"#00000090",backdropFilter:"blur(8px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16,animation:"fadeIn .2s"}}>
           <div className={"pop"} onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520,maxHeight:"90vh",overflowY:"auto",borderRadius:"16px"}}>
             {modal==="detail"
-              ? <DetailModal p={sel} onEdit={()=>{setForm({...sel});setModal("edit");}} onAdvance={()=>advanceFase(sel)} onFollowUp={()=>moveFase(sel,"FOLLOW_UP")} onNonInt={()=>moveFase(sel,"NON_INT")} onNonPiace={()=>moveFase(sel,"NON_PIACE")} onRiattiva={()=>moveFase(sel,"RIATTIVA")} onClose={closeModal} onUpdateProfilo={pr=>updateProfilo(sel.id,pr)} onUpdateChecklist={cl=>updateChecklist(sel.id,cl)} onDeleteStorico={fase=>deleteStorico(sel.id,fase)} onUpdateStoricoData={(fase,data,newFase,newStorico)=>updateStoricoData(sel.id,fase,data,newFase,newStorico)} onUpdateNote={async note=>{try{await sbUpdate(auth.token,sel.id,{note});setSel(s=>({...s,note}));setData(d=>d.map(x=>x.id===sel.id?{...x,note}:x));showToast("Nota salvata");}catch(e){showToast("Errore salvataggio","#ef4444");}}} />
+              ? <DetailModal p={sel} onEdit={()=>{setForm({...sel});setModal("edit");}} onAdvance={()=>advanceFase(sel)} onFollowUp={()=>moveFase(sel,"FOLLOW_UP")} onNonInt={()=>moveFase(sel,"NON_INT")} onNonPiace={()=>moveFase(sel,"NON_PIACE")} onRiattiva={()=>moveFase(sel,"RIATTIVA")} onClose={closeModal} onUpdateProfilo={pr=>updateProfilo(sel.id,pr)} onUpdateChecklist={cl=>updateChecklist(sel.id,cl)} onDeleteStorico={fase=>deleteStorico(sel.id,fase)} onUpdateStoricoData={(fase,data,newFase,newStorico)=>updateStoricoData(sel.id,fase,data,newFase,newStorico)} />
               : <FormModal form={form} setForm={setForm} onSave={saveForm} onClose={closeModal} onDelete={modal==="edit"?()=>deleteProp(form.id):null} isEdit={modal==="edit"} />
             }
           </div>
@@ -1371,92 +1371,6 @@ function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, s
 }
 
 //  FORM MODAL 
-// ── NOTA VOCALE ──────────────────────────────────────────────────
-function VoiceNoteBtn({ onResult }) {
-  const [listening, setListening] = useState(false);
-  const [supported] = useState(()=>!!(window.SpeechRecognition||window.webkitSpeechRecognition));
-  const recRef    = useRef(null);
-  const activeRef = useRef(false); // traccia se vogliamo ancora ascoltare
-  const accRef    = useRef("");    // accumula il testo finale
-
-  function start() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const rec = new SR();
-    rec.lang = "it-IT";
-    rec.continuous = false;      // più compatibile su Safari/iOS
-    rec.interimResults = true;
-    recRef.current = rec;
-
-    rec.onresult = e => {
-      let interim = "";
-      let final   = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final   += e.results[i][0].transcript;
-        else                       interim += e.results[i][0].transcript;
-      }
-      if (final)   accRef.current = (accRef.current + " " + final).trim();
-      // Mostra in tempo reale la combinazione di testo già confermato + quello in corso
-      onResult((accRef.current + (interim ? " " + interim : "")).trim());
-    };
-
-    rec.onerror = e => {
-      if (e.error === "no-speech") {
-        // nessun suono rilevato — riprova se siamo ancora in ascolto
-        if (activeRef.current) start();
-      } else {
-        activeRef.current = false;
-        setListening(false);
-      }
-    };
-
-    rec.onend = () => {
-      // Se l'utente non ha fermato manualmente, riavvia
-      if (activeRef.current) {
-        try { start(); } catch(_) { activeRef.current = false; setListening(false); }
-      }
-    };
-
-    rec.start();
-  }
-
-  function toggle() {
-    if (!supported) {
-      alert("Riconoscimento vocale non supportato. Usa Chrome o Safari su iOS 16+.");
-      return;
-    }
-    if (listening) {
-      activeRef.current = false;
-      recRef.current?.stop();
-      accRef.current = "";
-      setListening(false);
-    } else {
-      accRef.current = "";
-      activeRef.current = true;
-      setListening(true);
-      start();
-    }
-  }
-
-  if (!supported) return null;
-
-  return (
-    <button type="button" onClick={toggle}
-      title={listening ? "Clicca per fermare" : "Clicca per dettare una nota"}
-      style={{
-        position:"absolute", right:8, bottom:8,
-        width:30, height:30, borderRadius:"50%",
-        border:"none", cursor:"pointer",
-        background: listening ? "#ef4444" : "var(--a1-18)",
-        color: listening ? "#fff" : "var(--a2)",
-        display:"flex", alignItems:"center", justifyContent:"center",
-        fontSize:listening?12:14, transition:"all .2s",
-        boxShadow: listening ? "0 0 0 4px #ef444430" : "none",
-      }}>
-      {listening ? "◼" : "🎤"}
-    </button>
-  );
-}
-// ─────────────────────────────────────────────────────────────────
 
 function FormModal({ form, setForm, onSave, onClose, onDelete, isEdit }) {
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
@@ -1517,13 +1431,7 @@ function FormModal({ form, setForm, onSave, onClose, onDelete, isEdit }) {
           </div>
         )}
       </div>
-      <div style={{marginBottom:18}}>
-        <label style={lbl}>Note</label>
-        <div style={{position:"relative"}}>
-          <textarea value={form.note||""} onChange={e=>set("note",e.target.value)} style={{height:76,resize:"vertical",paddingRight:44}} placeholder="Dove lo hai conosciuto, contesto..." />
-          <VoiceNoteBtn onResult={t=>set("note",(form.note||"").trimEnd()+(form.note?" ":"")+t)} />
-        </div>
-      </div>
+      <div style={{marginBottom:18}}><label style={lbl}>Note</label><textarea value={form.note||""} onChange={e=>set("note",e.target.value)} style={{height:76,resize:"vertical"}} placeholder="Dove lo hai conosciuto, contesto..." /></div>
       <div style={{display:"flex",gap:9,justifyContent:"flex-end",flexWrap:"wrap"}}>
         {onDelete&&<button onClick={onDelete} style={{padding:"9px 15px",background:"#ef444415",color:"#f87171",border:"1px solid #ef444438",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:13}}>Elimina</button>}
         <button onClick={onClose} style={{padding:"9px 15px",background:"var(--bg4)",color:"#7da8d8",border:"1px solid var(--border2)",borderRadius:9,cursor:"pointer",fontWeight:600,fontSize:13}}>Annulla</button>
@@ -1605,17 +1513,7 @@ function ProfilazioneTab({ p, onUpdateProfilo }) {
 }
 
 //  DETAIL MODAL 
-function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, onRiattiva, onClose, onUpdateProfilo, onUpdateChecklist, onDeleteStorico, onUpdateStoricoData, onUpdateNote }) {
-  const [noteText, setNoteText] = useState(p.note||"");
-  const [noteDirty, setNoteDirty] = useState(false);
-  const [noteSaving, setNoteSaving] = useState(false);
-  async function saveNote() {
-    if (!noteDirty) return;
-    setNoteSaving(true);
-    await onUpdateNote(noteText);
-    setNoteDirty(false);
-    setNoteSaving(false);
-  }
+function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, onRiattiva, onClose, onUpdateProfilo, onUpdateChecklist, onDeleteStorico, onUpdateStoricoData }) {
   const [activeTab,setActiveTab]=useState("dettagli");
   const [stepPopup, setStepPopup]=useState(null); // {fase, date}
   const [stepDate, setStepDate]=useState("");
@@ -1722,16 +1620,7 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, o
             )}
           </div>
           {storico.length>0&&(<div style={{...box,marginBottom:9}}><div style={lbl}> Storico percorso</div><div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>{storico.map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:9}}><span style={{width:8,height:8,borderRadius:99,background:FASE_CLR[s.fase],flexShrink:0,boxShadow:"0 0 6px "+FASE_CLR[s.fase]+"70"}}/><span style={{fontSize:12.5,fontWeight:700,color:"var(--text)",minWidth:64}}>{FASE_LABEL[s.fase]}</span><input type="date" defaultValue={s.data} onBlur={e=>{if(e.target.value&&e.target.value!==s.data)onUpdateStoricoData(s.fase,e.target.value);}} style={{fontSize:11,padding:"2px 6px",width:"auto",minWidth:0,background:"var(--bg3)",border:"1px solid var(--border2)",borderRadius:6,color:"var(--muted)",cursor:"pointer"}}/><span style={{fontSize:10,color:"var(--muted)",marginLeft:"auto"}}>Ciclo {cicloOfDate(s.data)||"\u2014"}</span>{storico.length>1&&<button onClick={()=>onDeleteStorico(s.fase)} style={{background:"#ef444415",border:"1px solid #ef444430",borderRadius:6,color:"#f87171",cursor:"pointer",fontSize:11,fontWeight:800,padding:"2px 7px",marginLeft:4,lineHeight:1}}>x</button>}</div>))}</div></div>)}
-          <div style={{...box,marginBottom:9}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-              <div style={lbl}> Note</div>
-              {noteDirty&&<button onClick={saveNote} disabled={noteSaving} style={{fontSize:11,padding:"3px 10px",background:"var(--a1-13)",color:"var(--a2)",border:"1px solid var(--a1-25)",borderRadius:7,cursor:"pointer",fontWeight:700}}>{noteSaving?"...":"Salva"}</button>}
-            </div>
-            <div style={{position:"relative"}}>
-              <textarea value={noteText} onChange={e=>{setNoteText(e.target.value);setNoteDirty(true);}} onBlur={saveNote} style={{width:"100%",background:"var(--bg3)",border:"1px solid var(--border2)",borderRadius:9,padding:"8px 42px 8px 10px",color:"var(--text)",fontSize:13,fontFamily:"inherit",lineHeight:1.6,resize:"vertical",minHeight:64,outline:"none"}} placeholder="Aggiungi una nota..." />
-              <VoiceNoteBtn onResult={t=>{setNoteText(n=>(n||"").trimEnd()+(n?" ":"")+t);setNoteDirty(true);}} />
-            </div>
-          </div>
+          {p.note&&<div style={{...box,marginBottom:9}}><div style={lbl}> Note</div><p style={{color:"var(--text)",lineHeight:1.6,fontSize:13,marginTop:4}}>{p.note}</p></div>}
           {p.fase==="SUB"&&(
             <div style={{...box,marginBottom:9}}>
               <div style={lbl}>Checklist</div>
