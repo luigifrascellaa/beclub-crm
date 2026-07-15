@@ -467,6 +467,7 @@ export default function App() {
   const [fCitta, setFCitta]       = useState("");
   const [fInteresse, setFInteresse] = useState("");
   const [fPercorso, setFPercorso] = useState(""); // "" | "in_percorso" | "non_in_percorso"
+  const [fMembro, setFMembro]     = useState(""); // "" | userId
   const [ready, setReady]         = useState(false);
   const [saving, setSaving]       = useState(false);
   const [downline, setDownline]   = useState([]);
@@ -870,7 +871,8 @@ export default function App() {
       &&(!fCiclo||cicloOfDate(p.conosciutoAt)===Number(fCiclo))
       &&(!fCitta||( p.citta||"").toLowerCase().includes(fCitta.toLowerCase()))
       &&(!fInteresse||p.interesse===fInteresse)
-      &&(!fPercorso||(fPercorso==="in_percorso"?FASI_FUNNEL.includes(p.fase):FASI_SPECIALI.includes(p.fase)));
+      &&(!fPercorso||(fPercorso==="in_percorso"?FASI_FUNNEL.includes(p.fase):FASI_SPECIALI.includes(p.fase)))
+      &&(!fMembro||p._userId===fMembro||(!p._userId&&fMembro===auth.userId));
   });
 
   if (!auth) return <AuthScreen onAuth={setAuth} />;
@@ -909,7 +911,7 @@ export default function App() {
 
       <main className="mc" style={{flex:1,overflowY:"auto",height:"100vh",paddingBottom:0}}>
         {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} />}
-        {view==="lista" && <Lista prospects={listaData} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={setListaMode} hasTeam={dlProspects.length>0} />}
+        {view==="lista" && <Lista prospects={listaData} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale")setFMembro("");}} hasTeam={dlProspects.length>0} />}
         {view==="stats"   && <Statistiche data={data} dlProspects={dlProspects} />}
         {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} />}
         {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} />}
@@ -1043,8 +1045,8 @@ function CicloCountdown({ ciclo }) {
 
   if (!cicloData) return null;
 
-  const start = new Date(cicloData[1]+"T06:00:00");
-  const end   = new Date(cicloData[2]+"T06:00:00");
+  const start = new Date(cicloData[1]+"T06:59:00");
+  const end   = new Date(cicloData[2]+"T06:59:00");
   const now   = new Date();
   const totalMs = end - start;
   const leftMs  = Math.max(0, end - now);
@@ -1058,7 +1060,7 @@ function CicloCountdown({ ciclo }) {
   const ss = String(Math.floor((leftMs%60000)/1000)).padStart(2,"0");
 
   const ended = leftMs === 0;
-  const endLabel = end.toLocaleDateString("it-IT",{weekday:"long",day:"numeric",month:"long"})+" alle ore 06:00";
+  const endLabel = end.toLocaleDateString("it-IT",{weekday:"long",day:"numeric",month:"long"})+" alle ore 06:59";
 
   return (
     <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,padding:"16px 22px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
@@ -1274,7 +1276,7 @@ function Statistiche({ data, dlProspects }) {
 }
 
 //  LISTA 
-function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, setFFonte, fCiclo, setFCiclo, fCitta, setFCitta, fInteresse, setFInteresse, fPercorso, setFPercorso, onOpen, onAdd, listaMode, setListaMode, hasTeam }) {
+function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, setFFonte, fCiclo, setFCiclo, fCitta, setFCitta, fInteresse, setFInteresse, fPercorso, setFPercorso, fMembro, setFMembro, downline, auth, onOpen, onAdd, listaMode, setListaMode, hasTeam }) {
   return (
     <div style={{padding:"2rem 2.2rem",maxWidth:1280,margin:"0 auto"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.4rem",flexWrap:"wrap",gap:12}}>
@@ -1315,6 +1317,15 @@ function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, s
           <option value="in_percorso">In percorso</option>
           <option value="non_in_percorso">Non in percorso</option>
         </select>
+        {listaMode==="team" && (
+          <select value={fMembro} onChange={e=>setFMembro(e.target.value)} style={{flex:1,minWidth:150}}>
+            <option value="">Tutti i membri</option>
+            <option value={auth?.userId}>Solo i miei</option>
+            {(downline||[]).map(m=>(
+              <option key={m.id} value={m.id}>{m.nome||""} {m.cognome||""}</option>
+            ))}
+          </select>
+        )}
       </div>
       {prospects.length===0
         ?<div style={{textAlign:"center",padding:"4rem",color:"var(--border2)"}}><div style={{fontSize:44,marginBottom:12}}></div><p style={{fontSize:14,marginBottom:14}}>Nessun prospect trovato</p><button onClick={onAdd} style={{padding:"9px 20px",fontSize:13,fontWeight:800,background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:10,cursor:"pointer"}}>Aggiungi il primo</button></div>
