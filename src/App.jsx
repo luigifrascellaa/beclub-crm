@@ -468,6 +468,7 @@ export default function App() {
   const [fInteresse, setFInteresse] = useState("");
   const [fPercorso, setFPercorso] = useState(""); // "" | "in_percorso" | "non_in_percorso"
   const [fMembro, setFMembro]     = useState(""); // "" | userId
+  const [sortBy, setSortBy]       = useState("fase"); // "fase"|"data"|"alfa"|"followup"
   const [ready, setReady]         = useState(false);
   const [saving, setSaving]       = useState(false);
   const [downline, setDownline]   = useState([]);
@@ -875,6 +876,28 @@ export default function App() {
       &&(!fMembro||p._userId===fMembro||(!p._userId&&fMembro===auth.userId));
   });
 
+  const FASI_ORDER_ALL = [...FASI_FUNNEL, ...FASI_SPECIALI];
+  const listaDataSorted = [...listaData].sort((a,b)=>{
+    if (sortBy==="fase") {
+      const ai = FASI_ORDER_ALL.indexOf(a.fase);
+      const bi = FASI_ORDER_ALL.indexOf(b.fase);
+      if (ai !== bi) return ai - bi;
+      return (b.conosciutoAt||"").localeCompare(a.conosciutoAt||"");
+    }
+    if (sortBy==="data") return (b.conosciutoAt||"").localeCompare(a.conosciutoAt||"");
+    if (sortBy==="alfa") {
+      const an = (a.cognome||a.nome||"").toLowerCase();
+      const bn = (b.cognome||b.nome||"").toLowerCase();
+      return an.localeCompare(bn, "it");
+    }
+    if (sortBy==="followup") {
+      const af = a.followUp||"9999";
+      const bf = b.followUp||"9999";
+      return af.localeCompare(bf);
+    }
+    return 0;
+  });
+
   if (!auth) return <AuthScreen onAuth={setAuth} />;
   if (!ready) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--bg)",flexDirection:"column",gap:12}}>
@@ -911,7 +934,7 @@ export default function App() {
 
       <main className="mc" style={{flex:1,overflowY:"auto",height:"100vh",paddingBottom:0}}>
         {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} />}
-        {view==="lista" && <Lista prospects={listaData} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale")setFMembro("");}} hasTeam={dlProspects.length>0} />}
+        {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale")setFMembro("");}} hasTeam={dlProspects.length>0} />}
         {view==="stats"   && <Statistiche data={data} dlProspects={dlProspects} />}
         {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} />}
         {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} />}
@@ -1276,7 +1299,7 @@ function Statistiche({ data, dlProspects }) {
 }
 
 //  LISTA 
-function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, setFFonte, fCiclo, setFCiclo, fCitta, setFCitta, fInteresse, setFInteresse, fPercorso, setFPercorso, fMembro, setFMembro, downline, auth, onOpen, onAdd, listaMode, setListaMode, hasTeam }) {
+function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, setFFonte, fCiclo, setFCiclo, fCitta, setFCitta, fInteresse, setFInteresse, fPercorso, setFPercorso, fMembro, setFMembro, sortBy, setSortBy, downline, auth, onOpen, onAdd, listaMode, setListaMode, hasTeam }) {
   return (
     <div style={{padding:"2rem 2.2rem",maxWidth:1280,margin:"0 auto"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.4rem",flexWrap:"wrap",gap:12}}>
@@ -1299,6 +1322,12 @@ function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, s
         </div>
       </div>
       <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+        <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{flex:1,minWidth:130}}>
+          <option value="fase">Ordine per fase</option>
+          <option value="data">Data (recente prima)</option>
+          <option value="alfa">Alfabetico</option>
+          <option value="followup">Follow-up urgente</option>
+        </select>
         <input placeholder="Cerca..." value={search} onChange={e=>setSearch(e.target.value)} style={{flex:2,minWidth:200}} />
         <select value={fFase} onChange={e=>setFFase(e.target.value)} style={{flex:1,minWidth:130}}>
           <option value="">Tutte le fasi</option>
