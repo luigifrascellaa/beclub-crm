@@ -104,7 +104,7 @@ function bvOfPacchetto(key, bvCustom) {
 
 const FASI_FUNNEL   = ["INVITO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
 const FASI_DASH     = ["CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
-const FASI_SPECIALI = ["FOLLOW_UP","NON_INT","NON_PIACE"];
+const FASI_SPECIALI = ["DA_RISENTIRE","DA_RIFISSARE","NON_INT","NON_PIACE"];
 const FASI          = [...FASI_FUNNEL, ...FASI_SPECIALI];
 const FONTI         = ["Instagram","TikTok","Offline","Referenza","Lista Nomi","Modulo"];
 const FONTE_ICO     = { Instagram:"", TikTok:"", Offline:"", Referenza:"", "Lista Nomi":"", Modulo:"" };
@@ -113,11 +113,11 @@ const INTERESSE_CLR = { Alto:"#10b981", Medio:"#f59e0b", Basso:"#ef4444" };
 
 const FASE_CLR = {
   INVITO:"#8b5cf6", CONOSCITIVA:"#7c3aed", FUP1:"#2563eb", FUP2:"#3b82f6", PACK:"var(--a2)",
-  CLOSING:"#22d3ee", SUB:"#10b981", FOLLOW_UP:"#f59e0b", NON_INT:"#6b7280", NON_PIACE:"#ec4899",
+  CLOSING:"#22d3ee", SUB:"#10b981", DA_RISENTIRE:"#f59e0b", DA_RIFISSARE:"#f97316", NON_INT:"#6b7280", NON_PIACE:"#ec4899",
 };
 const FASE_LABEL = {
   INVITO:"Invito", CONOSCITIVA:"Conoscitiva", FUP1:"FUP 1", FUP2:"FUP 2", PACK:"Pack",
-  CLOSING:"Closing", SUB:"Iscritto", FOLLOW_UP:"Follow Up", NON_INT:"Non Int.", NON_PIACE:"Non mi piace",
+  CLOSING:"Closing", SUB:"Iscritto", DA_RISENTIRE:"Da risentire", DA_RIFISSARE:"Da rifissare", NON_INT:"Non Int.", NON_PIACE:"Non mi piace",
 };
 
 const PLEASURES = [
@@ -676,8 +676,8 @@ export default function App() {
     try {
       await sbUpdate(auth.token,p.id,toDB(upd,auth.userId));
       setData(d=>d.map(x=>x.id===p.id?upd:x)); setSel(upd);
-      showToast(fase==="FOLLOW_UP"?" Follow Up":fase==="NON_INT"?" Non interessato":fase==="NON_PIACE"?" Non mi piace":"↩ Riattivato",
-        fase==="FOLLOW_UP"?"#f59e0b":fase==="NON_INT"?"#6b7280":fase==="NON_PIACE"?"#ec4899":"var(--a1)");
+      showToast(fase==="DA_RISENTIRE"?" Da risentire":fase==="DA_RIFISSARE"?" Da rifissare":fase==="NON_INT"?" Non interessato":fase==="NON_PIACE"?" Non mi piace":"↩ Riattivato",
+        fase==="DA_RISENTIRE"?"#f59e0b":fase==="DA_RIFISSARE"?"#f97316":fase==="NON_INT"?"#6b7280":fase==="NON_PIACE"?"#ec4899":"var(--a1)");
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
   }
 
@@ -710,7 +710,7 @@ export default function App() {
     const ownerId=p._userId||auth.userId;
     const newStorico = p.storico.filter(s=>s.fase!==faseToRemove);
     // Calcola la nuova fase (l'ultima rimasta nello storico)
-    const FASI_ORDER = ["INVITO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB","FOLLOW_UP","NON_INT","NON_PIACE"];
+    const FASI_ORDER = ["INVITO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB","DA_RISENTIRE","DA_RIFISSARE","NON_INT","NON_PIACE"];
     const lastFase = newStorico.reduce((best, s) => {
       const bi = FASI_ORDER.indexOf(best);
       const si = FASI_ORDER.indexOf(s.fase);
@@ -848,12 +848,12 @@ export default function App() {
   const cd    = dataByCiclo(dashData, dashCiclo);
   const cdSub = cd.filter(p=>p.fase==="SUB");
   const cdAct = cd.filter(p=>["CONOSCITIVA","FUP1","FUP2","PACK","CLOSING"].includes(p.fase));
-  const cdFU  = dashData.filter(p=>p.fase==="FOLLOW_UP");
+  const cdFU  = dashData.filter(p=>p.fase==="DA_RISENTIRE"||p.fase==="DA_RIFISSARE");
   const cdNI  = cd.filter(p=>p.fase==="NON_INT"||p.fase==="NON_PIACE");
   const cdConv= cd.length?Math.round(cdSub.length/cd.length*100):0;
   const totSub  = dashData.filter(p=>p.fase==="SUB").length;
   const totConv = dashData.length?Math.round(totSub/dashData.length*100):0;
-  const urgenti = data.filter(p=>(isOver(p.followUp)||isToday(p.followUp))&&p.fase!=="NON_INT"&&p.fase!=="NON_PIACE");
+  const urgenti = data.filter(p=>(isOver(p.followUp)||isToday(p.followUp))&&p.fase!=="NON_INT"&&p.fase!=="NON_PIACE"&&p.fase!=="DA_RIFISSARE");
   const funnelCounts=FASI_DASH.map(f=>({f,n:cd.filter(p=>p.fase===f).length}));
   const funnelMax=Math.max(cd.length,1);
 
@@ -952,7 +952,7 @@ export default function App() {
         <div onClick={closeModal} style={{position:"fixed",inset:0,background:"#00000090",backdropFilter:"blur(8px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16,animation:"fadeIn .2s"}}>
           <div className={"pop"} onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520,maxHeight:"90vh",overflowY:"auto",borderRadius:"16px"}}>
             {modal==="detail"
-              ? <DetailModal p={sel} onEdit={()=>{setForm({...sel});setModal("edit");}} onAdvance={()=>advanceFase(sel)} onFollowUp={()=>moveFase(sel,"FOLLOW_UP")} onNonInt={()=>moveFase(sel,"NON_INT")} onNonPiace={()=>moveFase(sel,"NON_PIACE")} onRiattiva={()=>moveFase(sel,"RIATTIVA")} onClose={closeModal} onUpdateProfilo={pr=>updateProfilo(sel.id,pr)} onUpdateChecklist={cl=>updateChecklist(sel.id,cl)} onDeleteStorico={fase=>deleteStorico(sel.id,fase)} onUpdateStoricoData={(fase,data,newFase,newStorico)=>updateStoricoData(sel.id,fase,data,newFase,newStorico)} />
+              ? <DetailModal p={sel} onEdit={()=>{setForm({...sel});setModal("edit");}} onAdvance={()=>advanceFase(sel)} onFollowUp={()=>moveFase(sel,"DA_RISENTIRE")} onNonInt={()=>moveFase(sel,"NON_INT")} onNonPiace={()=>moveFase(sel,"NON_PIACE")} onDaRifissare={()=>moveFase(sel,"DA_RIFISSARE")} onRiattiva={()=>moveFase(sel,"RIATTIVA")} onClose={closeModal} onUpdateProfilo={pr=>updateProfilo(sel.id,pr)} onUpdateChecklist={cl=>updateChecklist(sel.id,cl)} onDeleteStorico={fase=>deleteStorico(sel.id,fase)} onUpdateStoricoData={(fase,data,newFase,newStorico)=>updateStoricoData(sel.id,fase,data,newFase,newStorico)} />
               : <FormModal form={form} setForm={setForm} onSave={saveForm} onClose={closeModal} onDelete={modal==="edit"?()=>deleteProp(form.id):null} isEdit={modal==="edit"} />
             }
           </div>
@@ -1165,7 +1165,7 @@ function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, totSub, totConv, totAll, f
             </div>
           }
           <div style={{display:"flex",gap:10,marginTop:16,paddingTop:14,borderTop:"1px dashed #11203a"}}>
-            {[{f:"FOLLOW_UP",n:cdFU.length},{f:"NON_INT",n:cdNI.length},{f:"NON_PIACE",n:cd.filter(p=>p.fase==="NON_PIACE").length}].map(({f,n})=>(
+            {[{f:"DA_RISENTIRE",n:cd.filter(p=>p.fase==="DA_RISENTIRE").length},{f:"DA_RIFISSARE",n:cd.filter(p=>p.fase==="DA_RIFISSARE").length},{f:"NON_INT",n:cdNI.length},{f:"NON_PIACE",n:cd.filter(p=>p.fase==="NON_PIACE").length}].map(({f,n})=>(
               <div key={f} style={{flex:1,background:FASE_CLR[f]+"12",border:"1px solid "+FASE_CLR[f]+"28",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:8,height:8,borderRadius:99,background:FASE_CLR[f],flexShrink:0}} />
                 <div><div style={{fontWeight:900,fontSize:18,color:FASE_CLR[f]}}>{n}</div><div style={{fontSize:10,color:"var(--muted)",marginTop:1}}>{FASE_LABEL[f]}</div></div>
@@ -1182,7 +1182,7 @@ function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, totSub, totConv, totAll, f
                   {cdFU.map(p=>(
                     <div key={p.id} className="hrow" onClick={()=>onOpen(p)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#f59e0b09",border:"1px solid #f59e0b1e",borderRadius:9,padding:"8px 11px",cursor:"pointer"}}>
                       <div style={{display:"flex",alignItems:"center",gap:9}}>
-                        <Av n={p.nome} c={p.cognome} color={FASE_CLR.FOLLOW_UP} />
+                        <Av n={p.nome} c={p.cognome} color={FASE_CLR[p.fase]||FASE_CLR.DA_RISENTIRE} />
                         <span style={{fontWeight:700,color:"var(--text)",fontSize:12}}>{p.nome} {p.cognome}</span>
                       </div>
                       <span style={{fontSize:10,color:"#fbbf24"}}>{fmt(p.followUp)}</span>
@@ -1524,7 +1524,7 @@ function ProfilazioneTab({ p, onUpdateProfilo }) {
 }
 
 //  DETAIL MODAL 
-function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, onRiattiva, onClose, onUpdateProfilo, onUpdateChecklist, onDeleteStorico, onUpdateStoricoData }) {
+function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, onDaRifissare, onRiattiva, onClose, onUpdateProfilo, onUpdateChecklist, onDeleteStorico, onUpdateStoricoData }) {
   const [activeTab,setActiveTab]=useState("dettagli");
   const [stepPopup, setStepPopup]=useState(null); // {fase, date}
   const [stepDate, setStepDate]=useState("");
@@ -1656,7 +1656,7 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, o
             {isSpeciale&&<button onClick={onRiattiva} style={{padding:"9px 16px",background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:9,cursor:"pointer",fontWeight:800,fontSize:12}}>↩ Riattiva nel Funnel</button>}
             <button onClick={onEdit} style={{padding:"9px 16px",background:"var(--bg4)",color:"#7da8d8",border:"1px solid var(--border2)",borderRadius:9,cursor:"pointer",fontWeight:600,fontSize:12}}> Modifica</button>
           </div>
-          {!isSpeciale&&(<div style={{borderTop:"1px solid #0d1b33",marginTop:13,paddingTop:13,display:"flex",gap:9,flexWrap:"wrap"}}><div style={{fontSize:10,color:"var(--border2)",width:"100%",fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:2}}>Stato speciale</div>{p.fase!=="FOLLOW_UP"&&<button onClick={onFollowUp} style={{padding:"8px 13px",background:"#f59e0b16",color:"#fbbf24",border:"1px solid #f59e0b38",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Follow Up caldo</button>}{p.fase!=="NON_INT"&&<button onClick={onNonInt} style={{padding:"8px 13px",background:"#ef444414",color:"#f87171",border:"1px solid #ef444436",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Non interessato</button>}{p.fase!=="NON_PIACE"&&<button onClick={onNonPiace} style={{padding:"8px 13px",background:"#ec489918",color:"#f472b6",border:"1px solid #ec489938",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Non mi piace</button>}</div>)}
+          {!isSpeciale&&(<div style={{borderTop:"1px solid #0d1b33",marginTop:13,paddingTop:13,display:"flex",gap:9,flexWrap:"wrap"}}><div style={{fontSize:10,color:"var(--border2)",width:"100%",fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:2}}>Stato speciale</div>{p.fase!=="DA_RISENTIRE"&&<button onClick={onFollowUp} style={{padding:"8px 13px",background:"#f59e0b16",color:"#fbbf24",border:"1px solid #f59e0b38",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Da risentire</button>}{p.fase!=="DA_RIFISSARE"&&<button onClick={onDaRifissare} style={{padding:"8px 13px",background:"#f9731616",color:"#fb923c",border:"1px solid #f9731638",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Da rifissare</button>}{p.fase!=="NON_INT"&&<button onClick={onNonInt} style={{padding:"8px 13px",background:"#ef444414",color:"#f87171",border:"1px solid #ef444436",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Non interessato</button>}{p.fase!=="NON_PIACE"&&<button onClick={onNonPiace} style={{padding:"8px 13px",background:"#ec489918",color:"#f472b6",border:"1px solid #ec489938",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Non mi piace</button>}</div>)}
         </>
       )}
       {activeTab==="profilazione"&&<ProfilazioneTab p={p} onUpdateProfilo={onUpdateProfilo}/>}
