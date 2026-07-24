@@ -184,10 +184,29 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
 
   // squadra (sinistra/destra) di ogni membro rispetto a chi guarda la pagina
   const squadraOf = useMemo(() => {
+    const cache = {};
+    function findSquadra(userId) {
+      if (userId === auth.userId) return null;
+      if (cache[userId] !== undefined) return cache[userId];
+      const chainVisited = [];
+      let current = (allProfiles || []).find(p => p.id === userId);
+      while (current && current.positioned_under && current.positioned_under !== auth.userId) {
+        chainVisited.push(current.id);
+        current = (allProfiles || []).find(p => p.id === current.positioned_under);
+      }
+      let result = null;
+      if (current && current.positioned_under === auth.userId) {
+        const pos = (positions || []).find(p => p.upline_id === auth.userId && p.member_id === current.id);
+        result = pos ? pos.team : null;
+      }
+      chainVisited.forEach(id => { cache[id] = result; });
+      cache[userId] = result;
+      return result;
+    }
     const map = {};
-    (positions || []).filter(p => p.upline_id === auth.userId).forEach(p => { map[p.member_id] = p.team; });
+    venduti.forEach(p => { map[p.user_id] = findSquadra(p.user_id); });
     return map;
-  }, [positions, auth.userId]);
+  }, [allProfiles, positions, auth.userId, venduti]);
 
   const vendutiSinistra = useMemo(() => venduti.filter(p => squadraOf[p.user_id] === "sinistra"), [venduti, squadraOf]);
   const vendutiDestra    = useMemo(() => venduti.filter(p => squadraOf[p.user_id] === "destra"), [venduti, squadraOf]);
