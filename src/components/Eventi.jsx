@@ -25,6 +25,9 @@ function PersonaCard({ p, ownerName, showOwner, onClick, onMarkSold }) {
           {p.citta && <span>{p.citta}</span>}
           {p.telefono && <span>{"\u00b7"} {p.telefono}</span>}
         </div>
+        {p.sponsor && (
+          <div style={{ fontSize: 10, color: "#a855f7", marginTop: 1 }}>Sponsor: {p.sponsor}</div>
+        )}
       </div>
       {onMarkSold && (
         <button onClick={e => { e.stopPropagation(); onMarkSold(); }}
@@ -66,6 +69,9 @@ function PersonaModal({ persona, defaultStato, onSave, onClose, onDelete }) {
         <div style={{ gridColumn: "1/-1" }}><label style={lbl}>Citta</label><input value={form.citta || ""} onChange={e => setForm(f => ({ ...f, citta: e.target.value }))} placeholder="Milano" /></div>
         <div><label style={lbl}>Telefono</label><input value={form.telefono || ""} onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))} placeholder="+39 333 000 0000" /></div>
         <div><label style={lbl}>Instagram</label><input value={form.instagram || ""} onChange={e => setForm(f => ({ ...f, instagram: e.target.value }))} placeholder="@username" /></div>
+        {form.stato === "venduto" && (
+          <div style={{ gridColumn: "1/-1" }}><label style={lbl}>Sponsor del ticket</label><input value={form.sponsor || ""} onChange={e => setForm(f => ({ ...f, sponsor: e.target.value }))} placeholder="Chi ha sponsorizzato" /></div>
+        )}
         <div style={{ gridColumn: "1/-1" }}><label style={lbl}>Note</label><textarea value={form.note || ""} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} style={{ height: 70, resize: "vertical" }} placeholder="Note..." /></div>
       </div>
 
@@ -136,7 +142,7 @@ function Leaderboard({ ranking }) {
   );
 }
 
-export function EventiView({ auth, allProfiles, downline, showToast,
+export function EventiView({ auth, allProfiles, downline, positions, showToast,
   sbListEventi,
   sbListEventoPersone, sbInsertEventoPersona, sbUpdateEventoPersona, sbDeleteEventoPersona,
   LUDOVICO_ID, onTicketCountChange }) {
@@ -167,14 +173,27 @@ export function EventiView({ auth, allProfiles, downline, showToast,
   const myTeamIds = useMemo(() => new Set([auth.userId, ...downline.map(d => d.id)]), [auth.userId, downline]);
 
   const inBallo = useMemo(() =>
-    persone.filter(p => p.stato === "in_ballo" && p.user_id === auth.userId),
-    [persone, auth.userId]
+    persone.filter(p => p.stato === "in_ballo" && myTeamIds.has(p.user_id)),
+    [persone, myTeamIds]
   );
   const venduti = useMemo(() =>
     persone.filter(p => p.stato === "venduto" && myTeamIds.has(p.user_id)
       && (filtroVenduti === "tutti" || p.categoria === filtroVenduti)),
     [persone, myTeamIds, filtroVenduti]
   );
+
+  // squadra (sinistra/destra) di ogni membro rispetto a chi guarda la pagina
+  const squadraOf = useMemo(() => {
+    const map = {};
+    (positions || []).filter(p => p.upline_id === auth.userId).forEach(p => { map[p.member_id] = p.team; });
+    return map;
+  }, [positions, auth.userId]);
+
+  const vendutiSinistra = useMemo(() => venduti.filter(p => squadraOf[p.user_id] === "sinistra"), [venduti, squadraOf]);
+  const vendutiDestra    = useMemo(() => venduti.filter(p => squadraOf[p.user_id] === "destra"), [venduti, squadraOf]);
+
+  // un leader (o Dimitri) puo' modificare l'anagrafica di chiunque nella propria downline
+  const canEdit = p => p.user_id === auth.userId || (auth?.profile?.is_leader && myTeamIds.has(p.user_id));
 
   function ownerNameOf(userId) {
     if (userId === auth.userId) return "Tu";
@@ -249,7 +268,7 @@ export function EventiView({ auth, allProfiles, downline, showToast,
         await sbUpdateEventoPersona(auth.token, form.id, {
           nome: form.nome, cognome: form.cognome || null, telefono: form.telefono || null,
           instagram: form.instagram || null, citta: form.citta || null, note: form.note || null,
-          categoria: form.categoria || "team",
+          categoria: form.categoria || "team", sponsor: form.sponsor || null,
           stato: form.stato, venduto_at: form.stato === "venduto" ? new Date().toISOString() : null,
         });
         setPersone(ps => ps.map(p => p.id === form.id ? { ...p, ...form } : p));
@@ -263,7 +282,7 @@ export function EventiView({ auth, allProfiles, downline, showToast,
           evento_id: eventoAttivo, user_id: auth.userId,
           nome: form.nome, cognome: form.cognome || null, telefono: form.telefono || null,
           instagram: form.instagram || null, citta: form.citta || null, note: form.note || null,
-          categoria: form.categoria || "team",
+          categoria: form.categoria || "team", sponsor: form.sponsor || null,
           stato: form.stato || "in_ballo",
         });
         const created = Array.isArray(row) ? row[0] : row;
@@ -363,13 +382,13 @@ export function EventiView({ auth, allProfiles, downline, showToast,
                 <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 420, overflowY: "auto" }}>
                   {inBallo.length === 0
                     ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>Nessuno al momento</div>
-                    : inBallo.map(p => <PersonaCard key={p.id} p={p} showOwner={false} onClick={() => setModal({ persona: p })} onMarkSold={() => salvaPersona({ ...p, stato: "venduto" })} />)
+                    : inBallo.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner={p.user_id !== auth.userId} onClick={() => canEdit(p) && setModal({ persona: p })} onMarkSold={canEdit(p) ? () => salvaPersona({ ...p, stato: "venduto" }) : null} />)
                   }
                 </div>
               </div>
 
               <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem" }}>
-                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 12, gap: 10, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 10, gap: 10, flexWrap: "wrap" }}>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#10b981", textTransform: "uppercase", letterSpacing: .6 }}>Ticket venduti</div>
                     <div style={{ fontSize: 30, fontWeight: 900, color: "#10b981", lineHeight: 1.1 }}>{venduti.length}</div>
@@ -380,10 +399,20 @@ export function EventiView({ auth, allProfiles, downline, showToast,
                     <option value="prospect">Solo prospect</option>
                   </select>
                 </div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                  <div style={{ flex: 1, background: "var(--a1-13)", border: "1px solid var(--a1-25)", borderRadius: 9, padding: "6px 10px", textAlign: "center" }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: "var(--a2)", textTransform: "uppercase", letterSpacing: .5 }}>Sinistra</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: "var(--a2)" }}>{vendutiSinistra.length}</div>
+                  </div>
+                  <div style={{ flex: 1, background: "#10b98115", border: "1px solid #10b98130", borderRadius: 9, padding: "6px 10px", textAlign: "center" }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: "#10b981", textTransform: "uppercase", letterSpacing: .5 }}>Destra</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: "#10b981" }}>{vendutiDestra.length}</div>
+                  </div>
+                </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 420, overflowY: "auto" }}>
                   {venduti.length === 0
                     ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>Nessun ticket venduto ancora</div>
-                    : venduti.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner onClick={() => p.user_id === auth.userId && setModal({ persona: p })} />)
+                    : venduti.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner onClick={() => canEdit(p) && setModal({ persona: p })} />)
                   }
                 </div>
               </div>
