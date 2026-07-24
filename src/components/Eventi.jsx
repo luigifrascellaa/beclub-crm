@@ -14,30 +14,54 @@ function fmtDate(d) {
   return new Date(d + "T12:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function progressPercent(p) {
+  let pct = 0;
+  if (p.acconto) pct += 50;
+  if (p.hotel) pct += 25;
+  if (p.saldo) pct += 25;
+  return pct;
+}
+
 // ===== card persona (in ballo o venduto) =====
 function PersonaCard({ p, ownerName, showOwner, onClick, onMarkSold }) {
+  const showProgress = p.stato === "venduto";
+  const pct = showProgress ? progressPercent(p) : 0;
+  const barColor = pct >= 100 ? "#10b981" : pct >= 50 ? "#f59e0b" : "#ef4444";
   return (
-    <div onClick={onClick} className="hrow" style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, cursor: onClick ? "pointer" : "default", border: "1px solid var(--border)", background: "var(--bg3)" }}>
-      <Av n={p.nome} c={p.cognome} color={p.stato === "venduto" ? "#10b981" : "#f59e0b"} size={32} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome} {p.cognome || ""}</div>
-        <div style={{ fontSize: 11, color: "var(--muted)", display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {p.citta && <span>{p.citta}</span>}
-          {p.telefono && <span>{"\u00b7"} {p.telefono}</span>}
+    <div onClick={onClick} className="hrow" style={{ display: "flex", flexDirection: "column", gap: 7, padding: "9px 12px", borderRadius: 10, cursor: onClick ? "pointer" : "default", border: "1px solid var(--border)", background: "var(--bg3)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <Av n={p.nome} c={p.cognome} color={p.stato === "venduto" ? "#10b981" : "#f59e0b"} size={32} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome} {p.cognome || ""}</div>
+          <div style={{ fontSize: 11, color: "var(--muted)", display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {p.citta && <span>{p.citta}</span>}
+            {p.telefono && <span>{"\u00b7"} {p.telefono}</span>}
+          </div>
+          {p.sponsor && (
+            <div style={{ fontSize: 10, color: "#a855f7", marginTop: 1 }}>Sponsor: {p.sponsor}</div>
+          )}
         </div>
-        {p.sponsor && (
-          <div style={{ fontSize: 10, color: "#a855f7", marginTop: 1 }}>Sponsor: {p.sponsor}</div>
+        {onMarkSold && (
+          <button onClick={e => { e.stopPropagation(); onMarkSold(); }}
+            style={{ padding: "5px 11px", fontSize: 11, fontWeight: 800, background: "#10b98118", color: "#10b981", border: "1px solid #10b98140", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+            Venduto
+          </button>
+        )}
+        {showOwner && ownerName && (
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--a2)", background: "var(--a1-13)", borderRadius: 7, padding: "3px 8px", whiteSpace: "nowrap" }}>
+            {ownerName}
+          </div>
         )}
       </div>
-      {onMarkSold && (
-        <button onClick={e => { e.stopPropagation(); onMarkSold(); }}
-          style={{ padding: "5px 11px", fontSize: 11, fontWeight: 800, background: "#10b98118", color: "#10b981", border: "1px solid #10b98140", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
-          Venduto
-        </button>
-      )}
-      {showOwner && ownerName && (
-        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--a2)", background: "var(--a1-13)", borderRadius: 7, padding: "3px 8px", whiteSpace: "nowrap" }}>
-          {ownerName}
+      {showProgress && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+            <span style={{ fontSize: 9, color: "var(--muted)", textTransform: "uppercase", letterSpacing: .4 }}>Completamento evento</span>
+            <span style={{ fontSize: 9, fontWeight: 800, color: barColor }}>{pct}%</span>
+          </div>
+          <div style={{ height: 5, background: "var(--bg4)", borderRadius: 99, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: pct + "%", background: barColor, borderRadius: 99, transition: "width .3s ease" }} />
+          </div>
         </div>
       )}
     </div>
@@ -70,7 +94,27 @@ function PersonaModal({ persona, defaultStato, onSave, onClose, onDelete }) {
         <div><label style={lbl}>Telefono</label><input value={form.telefono || ""} onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))} placeholder="+39 333 000 0000" /></div>
         <div><label style={lbl}>Instagram</label><input value={form.instagram || ""} onChange={e => setForm(f => ({ ...f, instagram: e.target.value }))} placeholder="@username" /></div>
         {form.stato === "venduto" && (
-          <div style={{ gridColumn: "1/-1" }}><label style={lbl}>Sponsor del ticket</label><input value={form.sponsor || ""} onChange={e => setForm(f => ({ ...f, sponsor: e.target.value }))} placeholder="Chi ha sponsorizzato" /></div>
+          <>
+            <div style={{ gridColumn: "1/-1" }}><label style={lbl}>Sponsor del ticket</label><input value={form.sponsor || ""} onChange={e => setForm(f => ({ ...f, sponsor: e.target.value }))} placeholder="Chi ha sponsorizzato" /></div>
+            <div style={{ gridColumn: "1/-1" }}>
+              <label style={lbl}>Completamento evento</label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {[
+                  { key: "acconto", label: "Acconto (50%)" },
+                  { key: "hotel", label: "Hotel (25%)" },
+                  { key: "saldo", label: "Saldo finale (25%)" },
+                ].map(({ key, label }) => (
+                  <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 11px", borderRadius: 9, border: "1px solid " + (form[key] ? "#10b98150" : "var(--border2)"), background: form[key] ? "#10b98115" : "var(--bg3)", cursor: "pointer", fontSize: 12, color: form[key] ? "#10b981" : "var(--muted)", fontWeight: 700 }}>
+                    <input type="checkbox" checked={!!form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.checked }))} style={{ width: "auto", margin: 0 }} />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, color: progressPercent(form) >= 100 ? "#10b981" : "var(--a2)" }}>
+                {progressPercent(form)}% completato
+              </div>
+            </div>
+          </>
         )}
         <div style={{ gridColumn: "1/-1" }}><label style={lbl}>Note</label><textarea value={form.note || ""} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} style={{ height: 70, resize: "vertical" }} placeholder="Note..." /></div>
       </div>
@@ -284,6 +328,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
           nome: form.nome, cognome: form.cognome || null, telefono: form.telefono || null,
           instagram: form.instagram || null, citta: form.citta || null, note: form.note || null,
           categoria: form.categoria || "team", sponsor: form.sponsor || null,
+          acconto: !!form.acconto, hotel: !!form.hotel, saldo: !!form.saldo,
           stato: form.stato, venduto_at: form.stato === "venduto" ? new Date().toISOString() : null,
         });
         setPersone(ps => ps.map(p => p.id === form.id ? { ...p, ...form } : p));
@@ -298,6 +343,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
           nome: form.nome, cognome: form.cognome || null, telefono: form.telefono || null,
           instagram: form.instagram || null, citta: form.citta || null, note: form.note || null,
           categoria: form.categoria || "team", sponsor: form.sponsor || null,
+          acconto: !!form.acconto, hotel: !!form.hotel, saldo: !!form.saldo,
           stato: form.stato || "in_ballo",
         });
         const created = Array.isArray(row) ? row[0] : row;
