@@ -249,7 +249,7 @@ function applyTema(temaKey) {
 }
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
 :root{
   --bg:#060b18; --bg2:#080f1f; --bg3:#0a1426; --bg4:#0d1b33;
   --border:#11203a; --border2:#1e3a5f;
@@ -257,11 +257,11 @@ const CSS = `
   --text:#dbeafe; --muted:#5278a8; --glow:#2563eb;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body,#root{height:100%;font-family:'Inter',sans-serif}
+html,body,#root{height:100%;font-family:'Poppins',sans-serif}
 body{background:var(--bg);color:var(--text);overflow:hidden}
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
-input,select,textarea{background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:9px 13px;color:var(--text);font-size:13px;font-family:'Inter',sans-serif;outline:none;width:100%;transition:border .2s}
+input,select,textarea{background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:9px 13px;color:var(--text);font-size:13px;font-family:'Poppins',sans-serif;outline:none;width:100%;transition:border .2s}
 input:focus,select:focus,textarea:focus{border-color:var(--a1);box-shadow:0 0 0 3px var(--a1-13)}
 input::placeholder,textarea::placeholder{color:var(--muted)}
 select option{background:var(--bg3)}
@@ -276,8 +276,8 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.6) sepia(1) h
 .pop{animation:popIn .22s cubic-bezier(.34,1.3,.64,1)}
 .pulse{animation:pulse 2.5s ease-in-out infinite}
 .bar{border-radius:99px;animation:barIn .8s cubic-bezier(.4,0,.2,1) forwards}
-.tabbtn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:700;font-family:'Inter',sans-serif;transition:all .2s}
-.togbtn{width:34px;height:28px;border-radius:7px;border:none;cursor:pointer;font-size:13px;font-weight:900;font-family:'Inter',sans-serif;transition:all .18s;display:flex;align-items:center;justify-content:center}
+.tabbtn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:700;font-family:'Poppins',sans-serif;transition:all .2s}
+.togbtn{width:34px;height:28px;border-radius:7px;border:none;cursor:pointer;font-size:13px;font-weight:900;font-family:'Poppins',sans-serif;transition:all .18s;display:flex;align-items:center;justify-content:center}
 .spinner{width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--a1);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
 @media(max-width:768px){
   body{overflow:auto}
@@ -392,7 +392,7 @@ function AuthScreen({ onAuth }) {
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--bg)",padding:16}}>
       <div className="pop" style={{width:"100%",maxWidth:400,background:"var(--bg2)",border:"1px solid var(--border2)",borderRadius:20,padding:"2.2rem",boxShadow:"0 20px 70px #000000aa"}}>
         <div style={{textAlign:"center",marginBottom:28}}>
-          <div style={{fontWeight:900,fontSize:20,color:"var(--text)",letterSpacing:-0.5}}>BE Club CRM</div>
+          <div style={{fontWeight:900,fontSize:20,color:"var(--text)",letterSpacing:-0.5}}>Kairos CRM</div>
         </div>
         <div style={{display:"flex",background:"var(--bg3)",borderRadius:10,padding:4,marginBottom:24,border:"1px solid var(--border)"}}>
           {["login","signup"].map(m=>(
@@ -1004,7 +1004,7 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
   return (
     <aside className="sb" style={{width:222,minWidth:222,background:"var(--bg2)",borderRight:"1px solid #11203a",padding:"1.5rem .9rem",display:"flex",flexDirection:"column",gap:4,height:"100vh",overflowY:"auto"}}>
       <div style={{marginBottom:24,paddingLeft:4}}>
-        <div style={{fontWeight:900,fontSize:15,color:"var(--text)",lineHeight:1.2}}>BE Club CRM</div>
+        <div style={{fontWeight:900,fontSize:15,color:"var(--text)",lineHeight:1.2}}>Kairos CRM</div>
       </div>
 
       {navs.map(item=>(
