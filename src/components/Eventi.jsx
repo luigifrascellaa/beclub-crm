@@ -185,26 +185,22 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   // squadra (sinistra/destra) di ogni membro rispetto a chi guarda la pagina
   const squadraOf = useMemo(() => {
     const cache = {};
-    function findSquadra(userId) {
-      if (userId === auth.userId) return null;
-      if (cache[userId] !== undefined) return cache[userId];
-      const chainVisited = [];
-      let current = (allProfiles || []).find(p => p.id === userId);
-      while (current && current.positioned_under && current.positioned_under !== auth.userId) {
-        chainVisited.push(current.id);
-        current = (allProfiles || []).find(p => p.id === current.positioned_under);
-      }
-      let result = null;
-      if (current && current.positioned_under === auth.userId) {
-        const pos = (positions || []).find(p => p.upline_id === auth.userId && p.member_id === current.id);
-        result = pos ? pos.team : null;
-      }
-      chainVisited.forEach(id => { cache[id] = result; });
-      cache[userId] = result;
+    function getTeamForMe(memberId, depth) {
+      if (memberId === auth.userId) return null;
+      if (cache[memberId] !== undefined) return cache[memberId];
+      if (depth > 40) return null; // sicurezza anti-loop su dati incoerenti
+      // controlla PRIMA se questo nodo specifico ha un collegamento diretto con te
+      const pos = (positions || []).find(p => p.member_id === memberId && p.upline_id === auth.userId);
+      if (pos) { cache[memberId] = pos.team; return pos.team; }
+      // altrimenti risali di un livello fisico e riprova da li'
+      const member = (allProfiles || []).find(p => p.id === memberId);
+      const parent = member ? (allProfiles || []).find(p => p.id === member.positioned_under) : null;
+      const result = parent ? getTeamForMe(parent.id, depth + 1) : null;
+      cache[memberId] = result;
       return result;
     }
     const map = {};
-    venduti.forEach(p => { map[p.user_id] = findSquadra(p.user_id); });
+    venduti.forEach(p => { map[p.user_id] = getTeamForMe(p.user_id, 0); });
     return map;
   }, [allProfiles, positions, auth.userId, venduti]);
 
