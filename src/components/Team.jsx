@@ -351,7 +351,7 @@ function TreeCanvas({ memberId, memberNome, memberCognome, memberEmail, allMembe
 
 
 
-export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,positions,onOpenProspect,onPositionInTree}){
+export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,positions,onOpenProspect,onPositionInTree,onToggleLeader}){
   const[selectedMember,setSelectedMember]=useState(null);
   const[teamFilter,setTeamFilter]=useState("all");
   const[copied,setCopied]=useState(false);
@@ -675,7 +675,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
             {downline.length===0
               ?<div style={{padding:"3rem",textAlign:"center",color:"var(--border2)"}}><div style={{fontSize:36,marginBottom:12}}>{"\u25c8"}</div><p style={{fontSize:14,marginBottom:8}}>Nessun membro ancora</p><p style={{fontSize:12,color:"var(--border2)"}}>Condividi il tuo link referral</p></div>
               :<table style={{width:"100%",borderCollapse:"collapse"}}>
-                <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Membro","Squadra","Prospect","Iscritti","Conv%","BV","Azione",""].map(h=>(<th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
+                <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Membro","Squadra","Prospect","Iscritti","Conv%","BV",...(auth.userId==="6a24d654-bfb2-40c7-86b1-80fe6142e86b"?["Leader"]:[]),"Azione",""].map(h=>(<th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
                 <tbody>{filteredMembers.map(m=>{
                   const mP=getMemberProspects(m.id);
                   const ms=teamStats(mP);
@@ -702,6 +702,14 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
                       <td style={{padding:"12px 16px",fontWeight:700,color:"#10b981",fontSize:13}}>{ms.sub}</td>
                       <td style={{padding:"12px 16px",fontWeight:800,fontSize:13,color:convColor(ms.conv)}}>{ms.conv}%</td>
                       <td style={{padding:"12px 16px",fontWeight:800,fontSize:13,color:"#f59e0b"}}>{ms.bv}</td>
+                      {auth.userId==="6a24d654-bfb2-40c7-86b1-80fe6142e86b" && (
+                        <td style={{padding:"12px 16px"}}>
+                          <button onClick={()=>onToggleLeader(m.id,!m.is_leader)}
+                            style={{padding:"5px 11px",borderRadius:8,border:"1px solid "+(m.is_leader?"#a855f760":"var(--border2)"),cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",background:m.is_leader?"#a855f720":"var(--bg3)",color:m.is_leader?"#c084fc":"var(--muted)"}}>
+                            {m.is_leader?" Leader":"Rendi leader"}
+                          </button>
+                        </td>
+                      )}
                       <td style={{padding:"12px 16px"}}><button onClick={()=>setSelectedMember(m)} style={{padding:"6px 12px",background:"var(--bg4)",color:"var(--a2)",border:"1px solid var(--border2)",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:11}}>Dettaglio</button></td>
                       <td style={{padding:"12px 16px",color:"var(--border2)",fontSize:16}}>{"\u203a"}</td>
                     </tr>

@@ -605,10 +605,16 @@ export default function App() {
       // usa l'owner originale se è un prospect del team, altrimenti auth.userId
       const ownerId = form._userId || auth.userId;
       if (modal==="add") {
+        const assignTo = form._assignTo || auth.userId;
         const np={...record,id:genId()};
-        await sbInsert(auth.token,toDB(np,auth.userId));
-        setData(d=>[...d,np]);
-        showToast("Prospect aggiunto ");
+        await sbInsert(auth.token,toDB(np,assignTo));
+        if (assignTo === auth.userId) {
+          setData(d=>[...d,np]);
+        } else {
+          const member = downline.find(m=>m.id===assignTo);
+          setDlProspects(d=>[...d,{...np,_userId:assignTo,_ownerName:(member?.nome||"")+" "+(member?.cognome||"")}]);
+        }
+        showToast(assignTo===auth.userId?"Prospect aggiunto ":"Prospect assegnato a "+((downline.find(m=>m.id===assignTo)?.nome)||"membro"));
       } else {
         await sbUpdate(auth.token,record.id,toDB(record,ownerId));
         // aggiorna in data (personali) o dlProspects (team)
@@ -746,6 +752,15 @@ export default function App() {
       showToast("Aggiornato");
     } catch(e) { showToast("Errore","#ef4444"); }
   }
+
+  async function toggleLeader(memberId, isLeader) {
+    try {
+      await sbUpdateProfile(auth.token, memberId, { is_leader: isLeader });
+      setDownline(d => d.map(m => m.id===memberId ? {...m, is_leader:isLeader} : m));
+      showToast(isLeader ? "Promosso a Leader" : "Rimosso da Leader");
+    } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
+  }
+
 
   async function updateProfile(fields) {
     try {
@@ -941,7 +956,7 @@ export default function App() {
         {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} />}
         {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale")setFMembro("");}} hasTeam={dlProspects.length>0} />}
         {view==="stats"   && <Statistiche data={data} dlProspects={dlProspects} />}
-        {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} />}
+        {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} />}
         {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} />}
         {view==="eventi"  && <EventiView auth={auth} allProfiles={allProfiles} downline={downline} showToast={showToast}
           sbListEventi={sbListEventi}
@@ -981,7 +996,7 @@ export default function App() {
           <div className={"pop"} onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520,maxHeight:"90vh",overflowY:"auto",borderRadius:"16px"}}>
             {modal==="detail"
               ? <DetailModal p={sel} onEdit={()=>{setForm({...sel});setModal("edit");}} onAdvance={()=>advanceFase(sel)} onFollowUp={()=>moveFase(sel,"DA_RISENTIRE")} onNonInt={()=>moveFase(sel,"NON_INT")} onNonPiace={()=>moveFase(sel,"NON_PIACE")} onDaRifissare={()=>moveFase(sel,"DA_RIFISSARE")} onRiattiva={()=>moveFase(sel,"RIATTIVA")} onClose={closeModal} onUpdateProfilo={pr=>updateProfilo(sel.id,pr)} onUpdateChecklist={cl=>updateChecklist(sel.id,cl)} onDeleteStorico={fase=>deleteStorico(sel.id,fase)} onUpdateStoricoData={(fase,data,newFase,newStorico)=>updateStoricoData(sel.id,fase,data,newFase,newStorico)} />
-              : <FormModal form={form} setForm={setForm} onSave={saveForm} onClose={closeModal} onDelete={modal==="edit"?()=>deleteProp(form.id):null} isEdit={modal==="edit"} />
+              : <FormModal form={form} setForm={setForm} onSave={saveForm} onClose={closeModal} onDelete={modal==="edit"?()=>deleteProp(form.id):null} isEdit={modal==="edit"} auth={auth} downline={downline} />
             }
           </div>
         </div>
@@ -1532,7 +1547,7 @@ function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, s
 
 //  FORM MODAL 
 
-function FormModal({ form, setForm, onSave, onClose, onDelete, isEdit }) {
+function FormModal({ form, setForm, onSave, onClose, onDelete, isEdit, auth, downline }) {
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const lbl={fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"};
   const dataBase=form.conosciutoAt||today();
@@ -1544,6 +1559,15 @@ function FormModal({ form, setForm, onSave, onClose, onDelete, isEdit }) {
         <h2 style={{fontWeight:900,fontSize:17,color:"var(--text)"}}>{isEdit?" Modifica":"+ Nuovo Prospect"}</h2>
         <button onClick={onClose} style={{background:"var(--bg4)",color:"#7da8d8",border:"1px solid var(--border2)",borderRadius:8,cursor:"pointer",padding:"4px 10px",fontSize:14}}></button>
       </div>
+      {!isEdit && auth?.profile?.is_leader && downline?.length>0 && (
+        <div style={{marginBottom:14,background:"var(--a1-13)",border:"1px solid var(--a1-25)",borderRadius:11,padding:"11px 13px"}}>
+          <label style={{fontSize:11,fontWeight:700,color:"var(--a2)",textTransform:"uppercase",letterSpacing:.8,marginBottom:6,display:"block"}}> Assegna a</label>
+          <select value={form._assignTo||auth.userId} onChange={e=>set("_assignTo",e.target.value)}>
+            <option value={auth.userId}>Te stesso</option>
+            {downline.map(m=><option key={m.id} value={m.id}>{m.nome||""} {m.cognome||""}</option>)}
+          </select>
+        </div>
+      )}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
         <div><label style={lbl}>Nome *</label><input value={form.nome||""} onChange={e=>set("nome",e.target.value)} placeholder="Nome" /></div>
         <div><label style={lbl}>Cognome</label><input value={form.cognome||""} onChange={e=>set("cognome",e.target.value)} placeholder="Cognome" /></div>
