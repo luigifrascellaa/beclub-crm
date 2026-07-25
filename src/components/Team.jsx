@@ -1,5 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 const FASI_DASH = ["FUP1","FUP2","PACK","CLOSING","SUB"];
 const FASE_CLR = {INVITO:"#8b5cf6",FUP1:"var(--a1)",FUP2:"#3b82f6",PACK:"var(--a2)",CLOSING:"#22d3ee",SUB:"#10b981",FOLLOW_UP:"#f59e0b",NON_INT:"#6b7280"};
@@ -351,6 +353,145 @@ function TreeCanvas({ memberId, memberNome, memberCognome, memberEmail, allMembe
 
 
 
+// ══════════════════════════════════════════════════════════════
+// MAPPA TEAM — geocoding gratuito (Nominatim) + Leaflet, cache in memoria per sessione
+// ══════════════════════════════════════════════════════════════
+const geocodeCache = {};
+async function geocodeCitta(nomeCitta) {
+  const key = nomeCitta.trim().toLowerCase();
+  if (geocodeCache[key] !== undefined) return geocodeCache[key];
+  try {
+    const res = await fetch(
+      "https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=it&q=" + encodeURIComponent(nomeCitta),
+      { headers: { "Accept-Language": "it" } }
+    );
+    const data = await res.json();
+    const coords = data && data[0] ? { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) } : null;
+    geocodeCache[key] = coords;
+    return coords;
+  } catch (e) {
+    geocodeCache[key] = null;
+    return null;
+  }
+}
+
+function MappaTeam({ downline, dlProspects }) {
+  const mapDivRef = useRef(null);
+  const mapInstance = useRef(null);
+  const markersLayer = useRef(null);
+  const [coordsByCitta, setCoordsByCitta] = useState({});
+  const [selectedCitta, setSelectedCitta] = useState(null);
+  const [loadingGeo, setLoadingGeo] = useState(true);
+
+  const gruppi = useMemo(() => {
+    const map = {};
+    downline.forEach(m => {
+      const citta = (m.citta || "").trim();
+      if (!citta) return;
+      const key = citta.toLowerCase();
+      if (!map[key]) map[key] = { nome: citta, membri: [] };
+      map[key].membri.push(m);
+    });
+    return Object.values(map);
+  }, [downline]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      setLoadingGeo(true);
+      const result = {};
+      for (const g of gruppi) {
+        if (cancelled) return;
+        const coords = await geocodeCitta(g.nome);
+        if (coords) result[g.nome.toLowerCase()] = coords;
+        await new Promise(r => setTimeout(r, 250));
+      }
+      if (!cancelled) { setCoordsByCitta(result); setLoadingGeo(false); }
+    }
+    if (gruppi.length > 0) run(); else setLoadingGeo(false);
+    return () => { cancelled = true; };
+  }, [gruppi]);
+
+  useEffect(() => {
+    if (!mapDivRef.current || mapInstance.current) return;
+    mapInstance.current = L.map(mapDivRef.current, { zoomControl: true }).setView([42.5, 12.5], 5.5);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; OpenStreetMap &copy; CARTO',
+      maxZoom: 18,
+    }).addTo(mapInstance.current);
+    markersLayer.current = L.layerGroup().addTo(mapInstance.current);
+    return () => { mapInstance.current?.remove(); mapInstance.current = null; };
+  }, []);
+
+  useEffect(() => {
+    if (!mapInstance.current || !markersLayer.current) return;
+    markersLayer.current.clearLayers();
+    gruppi.forEach(g => {
+      const coords = coordsByCitta[g.nome.toLowerCase()];
+      if (!coords) return;
+      const n = g.membri.length;
+      const size = Math.min(46, 22 + n * 4);
+      const icon = L.divIcon({
+        className: "",
+        html: "<div style='width:" + size + "px;height:" + size + "px;border-radius:50%;background:radial-gradient(circle,#60d9ff,#2563eb);box-shadow:0 0 " + (8 + n * 3) + "px " + (4 + n) + "px #2563ebaa,0 0 " + (16 + n * 3) + "px " + (8 + n) + "px #60d9ff55;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:12px;font-family:inherit;border:2px solid #ffffffcc;'>" + n + "</div>",
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2],
+      });
+      const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(markersLayer.current);
+      marker.on("click", () => {
+        mapInstance.current.flyTo([coords.lat, coords.lng], 11, { duration: .8 });
+        setSelectedCitta(g.nome);
+      });
+    });
+  }, [coordsByCitta, gruppi]);
+
+  const cittaSelezionata = gruppi.find(g => g.nome === selectedCitta);
+  const prospectCitta = cittaSelezionata ? dlProspects.filter(p => cittaSelezionata.membri.some(m => m.id === p._userId)) : [];
+  const statsCitta = cittaSelezionata ? teamStats(prospectCitta) : null;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: selectedCitta ? "1fr 280px" : "1fr", gap: 12 }}>
+      <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden", position: "relative" }}>
+        {loadingGeo && (
+          <div style={{ position: "absolute", top: 10, left: 10, zIndex: 500, background: "var(--bg3)", border: "1px solid var(--border2)", borderRadius: 8, padding: "5px 10px", fontSize: 11, color: "var(--muted)" }}>
+            Localizzazione città in corso...
+          </div>
+        )}
+        {gruppi.length === 0 && !loadingGeo && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--border2)", fontSize: 13, zIndex: 400 }}>
+            Nessun membro ha una città impostata nel profilo
+          </div>
+        )}
+        <div ref={mapDivRef} style={{ width: "100%", height: 460 }} />
+      </div>
+
+      {selectedCitta && cittaSelezionata && (
+        <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 14, padding: "1.1rem", height: "fit-content" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>{cittaSelezionata.nome}</div>
+            <button onClick={() => setSelectedCitta(null)} style={{ background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--muted)", borderRadius: 7, width: 22, height: 22, cursor: "pointer", fontSize: 11 }}>X</button>
+          </div>
+          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 10 }}>{cittaSelezionata.membri.length} {cittaSelezionata.membri.length === 1 ? "membro" : "membri"}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 14 }}>
+            {cittaSelezionata.membri.map(m => (
+              <div key={m.id} style={{ fontSize: 12, color: "var(--text)", background: "var(--bg3)", borderRadius: 7, padding: "6px 9px" }}>{m.nome || ""} {m.cognome || ""}</div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {[{ l: "Prospect", v: statsCitta.total }, { l: "Iscritti", v: statsCitta.sub }, { l: "Conv%", v: statsCitta.conv + "%" }, { l: "BV", v: statsCitta.bv }].map(({ l, v }) => (
+              <div key={l} style={{ background: "var(--bg3)", borderRadius: 9, padding: "8px 10px" }}>
+                <div style={{ fontSize: 9, color: "var(--muted)" }}>{l}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)" }}>{v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+// ══════════════════════════════════════════════════════════════
+
 export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,positions,onOpenProspect,onPositionInTree,onToggleLeader}){
   const[selectedMember,setSelectedMember]=useState(null);
   const[teamFilter,setTeamFilter]=useState("all");
@@ -538,7 +679,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
       )}
 
       <div style={{display:"flex",background:"var(--bg3)",borderRadius:10,padding:4,marginBottom:16,border:"1px solid var(--border)"}}>
-        {[{id:"dashboard",label:"Dashboard"},{id:"albero",label:"Albero"},{id:"membri",label:"Membri"}].map(t=>(
+        {[{id:"dashboard",label:"Dashboard"},{id:"albero",label:"Albero"},{id:"membri",label:"Membri"},{id:"mappa",label:"Mappa"}].map(t=>(
           <button key={t.id} onClick={()=>setActiveTeamTab(t.id)}
             style={{flex:1,padding:"8px 16px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",transition:"all .2s",background:activeTeamTab===t.id?"var(--bg4)":"transparent",color:activeTeamTab===t.id?"var(--a2)":"var(--muted)",boxShadow:activeTeamTab===t.id?"inset 0 0 0 1px var(--sidebar-border)":"none"}}>
             {t.label}
@@ -599,7 +740,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
         </div>
       )}
 
-      {activeTeamTab!=="albero"&&(
+      {(activeTeamTab==="dashboard"||activeTeamTab==="membri")&&(
         <>
           {activeTeamTab==="dashboard"&&(
             <>
@@ -719,6 +860,10 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
             }
           </div>
         </>
+      )}
+
+      {activeTeamTab==="mappa"&&(
+        <MappaTeam downline={downline} dlProspects={dlByCiclo} />
       )}
     </div>
   );
