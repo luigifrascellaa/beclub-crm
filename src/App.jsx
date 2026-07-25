@@ -1150,9 +1150,9 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
       </button>
 
       {urgenti.length>0 && (
-        <div className="pulse" style={{marginTop:8,background:"#ef444412",border:"1px solid #ef444435",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8,color:"#f87171",fontSize:12,fontWeight:700}}>
+        <button onClick={()=>setView("dash")} className="pulse" style={{marginTop:8,background:"#ef444412",border:"1px solid #ef444435",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8,color:"#f87171",fontSize:12,fontWeight:700,width:"100%",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
            {urgenti.length} urgent{urgenti.length===1?"e":"i"}
-        </div>
+        </button>
       )}
 
       <div style={{borderTop:"1px solid #11203a",paddingTop:14,marginTop:16,display:"flex",flexDirection:"column",gap:7}}>
