@@ -37,6 +37,8 @@ async function sbFetch(path, opts = {}) {
 const sbSignUp  = (email, pw)      => sbFetch("/auth/v1/signup", { method:"POST", body:JSON.stringify({ email, password:pw }) });
 const sbSignIn  = (email, pw)      => sbFetch("/auth/v1/token?grant_type=password", { method:"POST", body:JSON.stringify({ email, password:pw }) });
 const sbSignOut = (tok)            => sbFetch("/auth/v1/logout", { method:"POST", _token:tok });
+const sbResetPassword = (email)    => sbFetch("/auth/v1/recover?redirect_to="+encodeURIComponent(window.location.origin), { method:"POST", body:JSON.stringify({ email }) });
+const sbUpdatePasswordWithToken = (tok, newPassword) => sbFetch("/auth/v1/user", { method:"PUT", _token:tok, body:JSON.stringify({ password:newPassword }) });
 const sbList    = (tok, uid)       => sbFetch("/rest/v1/prospects?select=*&order=created_at.asc&user_id=eq."+uid, { _token:tok });
 const sbInsert  = (tok, row)       => sbFetch("/rest/v1/prospects", { method:"POST", _token:tok, body:JSON.stringify(row) });
 const sbUpdate  = (tok, id, row)   => sbFetch("/rest/v1/prospects?id=eq."+id, { method:"PATCH", _token:tok, body:JSON.stringify(row) });
@@ -313,10 +315,14 @@ function AuthScreen({ onAuth }) {
   const [email, setEmail]   = useState("");
   const [pass, setPass]     = useState("");
   const [err, setErr]       = useState("");
+  const [msg, setMsg]       = useState("");
   const [loading, setLoading] = useState(false);
   const [nome, setNome]       = useState("");
   const [cognome, setCognome] = useState("");
   const [remember, setRemember] = useState(true);
+  const [recoveryToken, setRecoveryToken] = useState(null);
+  const [newPass, setNewPass]   = useState("");
+  const [newPass2, setNewPass2] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -326,6 +332,19 @@ function AuthScreen({ onAuth }) {
       localStorage.setItem("pending_ref", ref);
       localStorage.setItem("pending_ref_expires", Date.now() + 10 * 60 * 1000);
       setMode("signup");
+    }
+
+    // Rileva il link di recupero password (Supabase lo passa nell'URL hash)
+    const hash = window.location.hash;
+    if (hash && hash.includes("type=recovery")) {
+      const hashParams = new URLSearchParams(hash.replace("#", ""));
+      const token = hashParams.get("access_token");
+      if (token) {
+        setRecoveryToken(token);
+        setMode("newpassword");
+        window.history.replaceState(null, "", window.location.pathname);
+        return; // non ripristinare la sessione vecchia, siamo qui per resettare la password
+      }
     }
 
     // Auto-restore session
@@ -340,10 +359,32 @@ function AuthScreen({ onAuth }) {
     }
   }, []);
 
+  async function inviaResetPassword() {
+    if (!email.trim()) { setErr("Inserisci la tua email"); return; }
+    setLoading(true); setErr(""); setMsg("");
+    try {
+      await sbResetPassword(email.trim());
+      setMsg("Ti abbiamo inviato un'email con il link per reimpostare la password.");
+    } catch(e) { setErr(e.message||"Errore di connessione"); }
+    setLoading(false);
+  }
+
+  async function salvaNuovaPassword() {
+    if (!newPass || newPass.length < 6) { setErr("La password deve avere almeno 6 caratteri"); return; }
+    if (newPass !== newPass2) { setErr("Le due password non coincidono"); return; }
+    setLoading(true); setErr("");
+    try {
+      await sbUpdatePasswordWithToken(recoveryToken, newPass);
+      setMsg("Password aggiornata! Ora puoi accedere.");
+      setMode("login"); setPass(""); setNewPass(""); setNewPass2(""); setRecoveryToken(null);
+    } catch(e) { setErr(e.message||"Errore durante l'aggiornamento della password"); }
+    setLoading(false);
+  }
+
   async function submit() {
     if (!email.trim() || !pass.trim()) { setErr("Compila email e password"); return; }
     if (mode === "signup" && (!nome.trim() || !cognome.trim())) { setErr("Compila nome e cognome"); return; }
-    setLoading(true); setErr("");
+    setLoading(true); setErr(""); setMsg("");
     try {
       if (mode === "signup") {
         const res = await sbSignUp(email, pass);
@@ -395,14 +436,32 @@ function AuthScreen({ onAuth }) {
         <div style={{textAlign:"center",marginBottom:28}}>
           <div style={{fontWeight:900,fontSize:20,color:"var(--text)",letterSpacing:-0.5}}>Kairos CRM</div>
         </div>
-        <div style={{display:"flex",background:"var(--bg3)",borderRadius:10,padding:4,marginBottom:24,border:"1px solid var(--border)"}}>
-          {["login","signup"].map(m=>(
-            <button key={m} onClick={()=>{setMode(m);setErr("");}} className="tabbtn"
-              style={{flex:1,background:mode===m?"var(--bg4)":"transparent",color:mode===m?"var(--a2)":"var(--muted)",boxShadow:mode===m?"inset 0 0 0 1px var(--sidebar-border)":"none"}}>
-              {m==="login"?"Accedi":"Registrati"}
-            </button>
-          ))}
-        </div>
+
+        {(mode==="login"||mode==="signup") && (
+          <div style={{display:"flex",background:"var(--bg3)",borderRadius:10,padding:4,marginBottom:24,border:"1px solid var(--border)"}}>
+            {["login","signup"].map(m=>(
+              <button key={m} onClick={()=>{setMode(m);setErr("");setMsg("");}} className="tabbtn"
+                style={{flex:1,background:mode===m?"var(--bg4)":"transparent",color:mode===m?"var(--a2)":"var(--muted)",boxShadow:mode===m?"inset 0 0 0 1px var(--sidebar-border)":"none"}}>
+                {m==="login"?"Accedi":"Registrati"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {mode==="reset" && (
+          <div style={{marginBottom:20}}>
+            <div style={{fontWeight:800,fontSize:15,color:"var(--text)",marginBottom:6}}>Password dimenticata</div>
+            <p style={{fontSize:12,color:"var(--muted)",lineHeight:1.5}}>Inserisci la tua email: ti mandiamo un link per reimpostare la password.</p>
+          </div>
+        )}
+
+        {mode==="newpassword" && (
+          <div style={{marginBottom:20}}>
+            <div style={{fontWeight:800,fontSize:15,color:"var(--text)",marginBottom:6}}>Imposta una nuova password</div>
+            <p style={{fontSize:12,color:"var(--muted)",lineHeight:1.5}}>Scegli la tua nuova password per accedere al CRM.</p>
+          </div>
+        )}
+
         <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:16}}>
           {mode==="signup" && (
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -416,16 +475,38 @@ function AuthScreen({ onAuth }) {
               </div>
             </div>
           )}
-          <div>
-            <label style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"}}>Email</label>
-            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="tua@email.com" onKeyDown={e=>e.key==="Enter"&&submit()} />
-          </div>
-          <div>
-            <label style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"}}>Password</label>
-            <input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&submit()} />
-          </div>
+
+          {(mode==="login"||mode==="signup"||mode==="reset") && (
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"}}>Email</label>
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="tua@email.com"
+                onKeyDown={e=>e.key==="Enter"&&(mode==="reset"?inviaResetPassword():submit())} />
+            </div>
+          )}
+
+          {(mode==="login"||mode==="signup") && (
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"}}>Password</label>
+              <input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&submit()} />
+            </div>
+          )}
+
+          {mode==="newpassword" && (
+            <>
+              <div>
+                <label style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"}}>Nuova password</label>
+                <input type="password" value={newPass} onChange={e=>setNewPass(e.target.value)} placeholder="Almeno 6 caratteri" onKeyDown={e=>e.key==="Enter"&&salvaNuovaPassword()} />
+              </div>
+              <div>
+                <label style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"}}>Conferma password</label>
+                <input type="password" value={newPass2} onChange={e=>setNewPass2(e.target.value)} placeholder="Ripeti la password" onKeyDown={e=>e.key==="Enter"&&salvaNuovaPassword()} />
+              </div>
+            </>
+          )}
         </div>
+
         {err && <div style={{background:"#ef444415",border:"1px solid #ef444435",borderRadius:9,padding:"9px 13px",fontSize:12,color:"#f87171",marginBottom:14,lineHeight:1.5}}>{err}</div>}
+        {msg && <div style={{background:"#10b98115",border:"1px solid #10b98135",borderRadius:9,padding:"9px 13px",fontSize:12,color:"#10b981",marginBottom:14,lineHeight:1.5}}>{msg}</div>}
 
         {mode==="login" && (
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16,cursor:"pointer"}} onClick={()=>setRemember(r=>!r)}>
@@ -435,15 +516,41 @@ function AuthScreen({ onAuth }) {
             <span style={{fontSize:12,color:"var(--muted)",userSelect:"none"}}>Ricordami su questo dispositivo</span>
           </div>
         )}
-        <button onClick={submit} disabled={loading}
-          style={{width:"100%",padding:"11px",background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:10,cursor:loading?"not-allowed":"pointer",fontWeight:800,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:loading?0.7:1}}>
-          {loading && <span className="spinner" />}
-          {mode==="login"?"Accedi":"Crea account"}
-        </button>
+
+        {mode==="reset" ? (
+          <button onClick={inviaResetPassword} disabled={loading}
+            style={{width:"100%",padding:"11px",background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:10,cursor:loading?"not-allowed":"pointer",fontWeight:800,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:loading?0.7:1}}>
+            {loading && <span className="spinner" />}
+            Invia link di reset
+          </button>
+        ) : mode==="newpassword" ? (
+          <button onClick={salvaNuovaPassword} disabled={loading}
+            style={{width:"100%",padding:"11px",background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:10,cursor:loading?"not-allowed":"pointer",fontWeight:800,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:loading?0.7:1}}>
+            {loading && <span className="spinner" />}
+            Salva nuova password
+          </button>
+        ) : (
+          <button onClick={submit} disabled={loading}
+            style={{width:"100%",padding:"11px",background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:10,cursor:loading?"not-allowed":"pointer",fontWeight:800,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:loading?0.7:1}}>
+            {loading && <span className="spinner" />}
+            {mode==="login"?"Accedi":"Crea account"}
+          </button>
+        )}
+
         {mode==="login" && (
+          <div style={{textAlign:"center",marginTop:16,fontSize:11,color:"var(--muted)",display:"flex",flexDirection:"column",gap:8}}>
+            <div>
+              Non hai un account?{" "}
+              <span onClick={()=>{setMode("signup");setErr("");setMsg("");}} style={{color:"var(--a2)",cursor:"pointer",fontWeight:700}}>Registrati</span>
+            </div>
+            <div>
+              <span onClick={()=>{setMode("reset");setErr("");setMsg("");}} style={{color:"var(--muted)",cursor:"pointer",textDecoration:"underline"}}>Hai dimenticato la password?</span>
+            </div>
+          </div>
+        )}
+        {mode==="reset" && (
           <div style={{textAlign:"center",marginTop:16,fontSize:11,color:"var(--muted)"}}>
-            Non hai un account?{" "}
-            <span onClick={()=>{setMode("signup");setErr("");}} style={{color:"var(--a2)",cursor:"pointer",fontWeight:700}}>Registrati</span>
+            <span onClick={()=>{setMode("login");setErr("");setMsg("");}} style={{color:"var(--a2)",cursor:"pointer",fontWeight:700}}>{"\u2190"} Torna al login</span>
           </div>
         )}
       </div>
