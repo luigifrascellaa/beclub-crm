@@ -20,7 +20,7 @@ function fmtGiorni(n) { return n === 1 ? "1 giorno" : n + " giorni"; }
 // ══════════════════════════════════════════════════════════════
 // MOTORE INSIGHT — tutto calcolato a regole sui dati gia' presenti nel CRM
 // ══════════════════════════════════════════════════════════════
-export function computeMentoreInsights(prospects, downline, cicloRangeCorrente, allProfiles) {
+export function computeMentoreInsights(prospects, downline, cicloRangeCorrente, allProfiles, viewerId) {
   const attiviFunnel = prospects.filter(p => FASI_FUNNEL.includes(p.fase) && p.fase !== "SUB");
 
   // 1. Collo di bottiglia nel funnel
@@ -36,8 +36,9 @@ export function computeMentoreInsights(prospects, downline, cicloRangeCorrente, 
   }
 
   // 2. Prospect caldi abbandonati (interesse Alto, fermi da 7+ giorni)
+  // SOLO i propri: e' un'azione personale, non ha senso mostrarla al team/upline
   const caldiAbbandonati = attiviFunnel
-    .filter(p => p.interesse === "Alto")
+    .filter(p => p.interesse === "Alto" && p._userId === viewerId)
     .map(p => ({ ...p, giorniFermo: giorniDa(ultimoMovimento(p)) }))
     .filter(p => p.giorniFermo !== null && p.giorniFermo >= 7)
     .sort((a, b) => b.giorniFermo - a.giorniFermo);
@@ -196,7 +197,7 @@ function RispostaBottleneck({ ins }) {
   );
 }
 function RispostaCaldi({ ins }) {
-  if (ins.caldiAbbandonati.length === 0) return <Vuoto testo="Nessun prospect caldo abbandonato al momento — ottimo lavoro di follow-up." />;
+  if (ins.caldiAbbandonati.length === 0) return <Vuoto testo="Nessun tuo prospect caldo abbandonato al momento — ottimo lavoro di follow-up." />;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
       {ins.caldiAbbandonati.slice(0, 8).map(p => (
@@ -299,7 +300,7 @@ function Vuoto({ testo }) {
 }
 
 const DOMANDE = [
-  { id: "caldi", gruppo: "Funnel e percorso", label: "Quali prospect caldi rischio di perdere?", Render: RispostaCaldi },
+  { id: "caldi", gruppo: "Funnel e percorso", label: "Quali miei prospect caldi rischio di perdere?", Render: RispostaCaldi },
   { id: "bottleneck", gruppo: "Funnel e percorso", label: "Dove si blocca il team nel percorso?", Render: RispostaBottleneck },
   { id: "fermi", gruppo: "Team", label: "Chi non ha lavorato in questo ciclo?", Render: RispostaFermiCiclo },
   { id: "senzacontatti", gruppo: "Team", label: "Chi non contatta nessuno da giorni?", Render: RispostaSenzaContatti },

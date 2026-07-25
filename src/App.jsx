@@ -888,7 +888,7 @@ export default function App() {
   // Insight del Mentore: personal + team combinati, ricalcolati ad ogni cambio dati
   const cicloRangeCorrente = CICLI.find(c => c[0] === CICLO_CORRENTE);
   const tuttiProspectMentore = [...data.map(p => ({ ...p, _userId: auth?.userId })), ...teamProspects];
-  const mentoreInsights = auth ? computeMentoreInsights(tuttiProspectMentore, downline, cicloRangeCorrente) : null;
+  const mentoreInsights = auth ? computeMentoreInsights(tuttiProspectMentore, downline, cicloRangeCorrente, allProfiles, auth.userId) : null;
 
   const listaSource = listaMode === "team" ? teamProspects : data;
   const listaData=listaSource.filter(p=>{
