@@ -4,6 +4,7 @@ import { TeamView } from "./components/Team";
 import { ProfiloView } from "./components/Profilo";
 import { ListaNomiView } from "./components/ListaNomi";
 import { EventiView } from "./components/Eventi";
+import { computeMentoreInsights, ConsigliCard, MentoreChatWidget } from "./components/Mentore";
 
 const SB_URL = "https://kuxrpbsvnkxhsicbyupp.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1eHJwYnN2bmt4aHNpY2J5dXBwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNzMwODIsImV4cCI6MjA5NzY0OTA4Mn0.s_lqOUC8939I2Wgf-Qkcq9WaiH1Nxze1uv4-PIV6s7I";
@@ -884,6 +885,11 @@ export default function App() {
     return { ...p, _ownerName: owner ? (owner.nome||owner.email)+" "+(owner.cognome||"") : "" };
   });
 
+  // Insight del Mentore: personal + team combinati, ricalcolati ad ogni cambio dati
+  const cicloRangeCorrente = CICLI.find(c => c[0] === CICLO_CORRENTE);
+  const tuttiProspectMentore = [...data.map(p => ({ ...p, _userId: auth?.userId })), ...teamProspects];
+  const mentoreInsights = auth ? computeMentoreInsights(tuttiProspectMentore, downline, cicloRangeCorrente) : null;
+
   const listaSource = listaMode === "team" ? teamProspects : data;
   const listaData=listaSource.filter(p=>{
     const q=search.toLowerCase();
@@ -950,10 +956,12 @@ export default function App() {
         </div>
       )}
 
+      <MentoreChatWidget insights={mentoreInsights} />
+
       <Sidebar view={view} setView={setView} data={data} urgenti={urgenti} onAdd={openAdd} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downline.length} sidebarMode={sidebarMode} setSidebarMode={setSidebarMode} />
 
       <main className="mc" style={{flex:1,overflowY:"auto",height:"100vh",paddingBottom:0}}>
-        {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} />}
+        {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} />}
         {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale")setFMembro("");}} hasTeam={dlProspects.length>0} />}
         {view==="stats"   && <Statistiche data={data} dlProspects={dlProspects} />}
         {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} />}
@@ -1129,7 +1137,7 @@ function CicloCountdown({ ciclo }) {
   );
 }
 
-function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, totSub, totConv, totAll, funnelCounts, funnelMax, urgenti, dashCiclo, setDashCiclo, onOpen, dashMode, setDashMode, hasTeam, ticketVenduti }) {
+function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, totSub, totConv, totAll, funnelCounts, funnelMax, urgenti, dashCiclo, setDashCiclo, onOpen, dashMode, setDashMode, hasTeam, ticketVenduti, mentoreInsights }) {
   const cc = v => v>=20?"#10b981":v>=10?"var(--a2)":"#f59e0b";
   const bvCiclo = cdSub.reduce((acc,p)=>acc+bvOfPacchetto(p.pacchetto,p.bvCustom),0);
   const kpis = [
@@ -1170,6 +1178,7 @@ function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, totSub, totConv, totAll, f
         </div>
       </div>
       <CicloCountdown ciclo={dashCiclo} />
+      <ConsigliCard insights={mentoreInsights} />
       <div className="kpi-grid" style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:16}}>
         {kpis.map((k,i)=>(
           <div key={i} className="kpi" style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
