@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 // ── COSTANTI LOCALI (duplicate volutamente, stesso pattern gia' usato in Team.jsx/Eventi.jsx) ──
 const FASI_FUNNEL = ["INVITO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
@@ -313,50 +313,97 @@ const DOMANDE = [
 // ══════════════════════════════════════════════════════════════
 // WIDGET FLOTTANTE — bottone in basso a destra + pannello domande
 // ══════════════════════════════════════════════════════════════
+function ChatIcon({ size = 22, color = "#fff" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M4 5h16v11H9l-4.2 3.6c-.3.26-.8.04-.8-.36V5z" stroke={color} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" fill="none" />
+      <circle cx="9" cy="10.5" r="1" fill={color} />
+      <circle cx="12" cy="10.5" r="1" fill={color} />
+      <circle cx="15" cy="10.5" r="1" fill={color} />
+    </svg>
+  );
+}
+function CloseIcon({ size = 20, color = "#fff" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M6 6l12 12M18 6L6 18" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function MentoreChatWidget({ insights }) {
   const [open, setOpen] = useState(false);
-  const [activeId, setActiveId] = useState(null);
+  const [messages, setMessages] = useState([
+    { role: "assistant", type: "text", text: "Ciao, sono il tuo Mentore. Scegli un argomento qui sotto per iniziare." },
+  ]);
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, open]);
 
   if (!insights) return null;
-  const active = DOMANDE.find(d => d.id === activeId);
   const gruppi = [...new Set(DOMANDE.map(d => d.gruppo))];
 
+  function askQuestion(d) {
+    setMessages(m => [...m,
+      { role: "user", type: "text", text: d.label },
+      { role: "assistant", type: "insight", Render: d.Render },
+    ]);
+  }
+
   return (
-    <div style={{ position: "fixed", bottom: 22, right: 22, zIndex: 1500 }}>
-      {open && (
-        <div style={{ position: "absolute", bottom: 62, right: 0, width: 320, maxHeight: 480, background: "var(--bg2)", border: "1px solid var(--border2)", borderRadius: 16, boxShadow: "0 12px 40px #000000a0", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
-              {active ? active.label : "Mentore"}
-            </div>
-            {active
-              ? <button onClick={() => setActiveId(null)} style={{ background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--a2)", borderRadius: 7, padding: "3px 9px", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>{"\u2190"} Indietro</button>
-              : <button onClick={() => setOpen(false)} style={{ background: "var(--bg3)", border: "1px solid var(--border2)", color: "var(--muted)", borderRadius: 7, width: 24, height: 24, cursor: "pointer", fontSize: 13 }}>X</button>
-            }
+    <div style={{ position: "fixed", bottom: 22, right: 22, zIndex: 1500, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+      <div style={{
+        width: 340, maxHeight: 500, background: "var(--bg2)", border: "1px solid var(--border2)", borderRadius: 20,
+        boxShadow: "0 18px 55px #000000b0", display: "flex", flexDirection: "column", overflow: "hidden",
+        marginBottom: 14, transformOrigin: "bottom right",
+        transform: open ? "scale(1) translateY(0)" : "scale(0.82) translateY(18px)",
+        opacity: open ? 1 : 0,
+        pointerEvents: open ? "auto" : "none",
+        transition: "transform .34s cubic-bezier(.34,1.3,.64,1), opacity .24s ease",
+      }}>
+        <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10, flexShrink: 0, background: "var(--bg3)" }}>
+          <div style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(135deg,var(--a1),var(--a2))", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <ChatIcon size={15} color="#fff" />
           </div>
-          <div style={{ padding: 14, overflowY: "auto", flex: 1 }}>
-            {active
-              ? <active.Render ins={insights} />
-              : gruppi.map(g => (
-                  <div key={g} style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)", textTransform: "uppercase", letterSpacing: .6, marginBottom: 7 }}>{g}</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {DOMANDE.filter(d => d.gruppo === g).map(d => (
-                        <button key={d.id} onClick={() => setActiveId(d.id)}
-                          style={{ textAlign: "left", padding: "9px 12px", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 9, color: "var(--text)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                          {d.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))
-            }
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", lineHeight: 1.1 }}>Mentore</div>
+            <div style={{ fontSize: 10, color: "var(--muted)" }}>Sempre aggiornato sui tuoi dati</div>
           </div>
         </div>
-      )}
+
+        <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+          {messages.map((m, i) => (
+            m.role === "user"
+              ? <div key={i} style={{ alignSelf: "flex-end", maxWidth: "82%", background: "linear-gradient(135deg,var(--a1),var(--a2))", color: "#fff", borderRadius: "13px 13px 3px 13px", padding: "8px 13px", fontSize: 12.5, fontWeight: 600 }}>{m.text}</div>
+              : <div key={i} style={{ alignSelf: "flex-start", maxWidth: "90%", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: "13px 13px 13px 3px", padding: "10px 13px" }}>
+                  {m.type === "text" ? <span style={{ fontSize: 12.5, color: "var(--text)", lineHeight: 1.5 }}>{m.text}</span> : <m.Render ins={insights} />}
+                </div>
+          ))}
+        </div>
+
+        <div style={{ borderTop: "1px solid var(--border)", padding: "10px 12px", flexShrink: 0, maxHeight: 160, overflowY: "auto" }}>
+          {gruppi.map(g => (
+            <div key={g} style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 9, fontWeight: 800, color: "var(--muted)", textTransform: "uppercase", letterSpacing: .5, marginBottom: 5 }}>{g}</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {DOMANDE.filter(d => d.gruppo === g).map(d => (
+                  <button key={d.id} onClick={() => askQuestion(d)}
+                    style={{ padding: "6px 11px", background: "var(--bg4)", border: "1px solid var(--border2)", borderRadius: 99, color: "var(--a2)", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "background .15s" }}>
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <button onClick={() => setOpen(o => !o)}
-        style={{ width: 56, height: 56, borderRadius: "50%", border: "none", cursor: "pointer", background: "linear-gradient(135deg,var(--a1),var(--a2))", color: "#fff", fontWeight: 900, fontSize: 12, boxShadow: "0 6px 20px var(--a1-31)", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: -.3 }}>
-        {open ? "X" : "M"}
+        style={{ width: 58, height: 58, borderRadius: "50%", border: "none", cursor: "pointer", background: "linear-gradient(135deg,var(--a1),var(--a2))", boxShadow: "0 6px 20px var(--a1-31)", display: "flex", alignItems: "center", justifyContent: "center", transition: "transform .2s ease" }}>
+        {open ? <CloseIcon size={20} color="#fff" /> : <ChatIcon size={24} color="#fff" />}
       </button>
     </div>
   );
