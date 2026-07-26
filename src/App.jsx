@@ -420,7 +420,7 @@ function AuthScreen({ onAuth }) {
           }
           localStorage.removeItem("pending_ref");
           localStorage.removeItem("pending_ref_expires");
-          await sbCreateProfile(tok, { id:userId, email, nome:nome.trim(), cognome:cognome.trim(), upline_id:uplineId, positioned_under:uplineId });
+          await sbCreateProfile(tok, { id:userId, email, nome:nome.trim(), cognome:cognome.trim(), upline_id:uplineId, positioned_under:uplineId, marketer_unlocked:false });
           const profile = await sbGetProfile(tok, userId);
           const authData = { token:tok, userId, email, profile:profile?.[0]||null };
           if (remember) localStorage.setItem("becrm_session", JSON.stringify(authData));
@@ -904,6 +904,14 @@ export default function App() {
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
   }
 
+  async function toggleMarketerUnlocked(memberId, unlocked) {
+    try {
+      await sbUpdateProfile(auth.token, memberId, { marketer_unlocked: unlocked });
+      setDownline(d => d.map(m => m.id===memberId ? {...m, marketer_unlocked:unlocked} : m));
+      showToast(unlocked ? "Marketer sbloccato" : "Marketer bloccato");
+    } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
+  }
+
 
   async function updateProfile(fields) {
     try {
@@ -1100,17 +1108,17 @@ export default function App() {
 
       <MentoreChatWidget insights={mentoreInsights} />
 
-      <Sidebar view={view} setView={setView} data={data} urgenti={urgenti} onAdd={openAdd} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downline.length} sidebarMode={sidebarMode} setSidebarMode={setSidebarMode} appMode={appMode} setAppMode={setAppMode} />
+      <Sidebar view={view} setView={setView} data={data} urgenti={urgenti} onAdd={openAdd} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downline.length} sidebarMode={sidebarMode} setSidebarMode={setSidebarMode} appMode={appMode} setAppMode={setAppMode} showToast={showToast} />
 
       <main className="mc" style={{flex:1,overflowY:"auto",height:"100vh",paddingBottom:0}}>
-        {appMode==="cliente" ? (
+        {(appMode==="cliente" || !auth?.profile?.marketer_unlocked) ? (
           <ClienteView auth={auth} onUpdateProfile={updateProfile} />
         ) : (
           <>
             {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} />}
             {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale")setFMembro("");}} hasTeam={dlProspects.length>0} />}
             {view==="stats"   && <Statistiche data={data} dlProspects={dlProspects} />}
-            {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} />}
+            {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} onToggleMarketer={toggleMarketerUnlocked} />}
             {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} />}
             {view==="eventi"  && <EventiView auth={auth} allProfiles={allProfiles} downline={downline} positions={positions} showToast={showToast}
               sbListEventi={sbListEventi}
@@ -1162,7 +1170,7 @@ export default function App() {
 }
 
 //  SIDEBAR 
-function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout, downlineCount, sidebarMode, setSidebarMode, appMode, setAppMode }) {
+function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout, downlineCount, sidebarMode, setSidebarMode, appMode, setAppMode, showToast }) {
   const navs = [
     { id:"dash",    icon:"", label:"Dashboard" },
     { id:"lista",   icon:"", label:"Prospect", badge:data.length },
@@ -1179,12 +1187,16 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
       </div>
 
       <div style={{display:"flex",background:"var(--bg3)",borderRadius:9,padding:3,marginBottom:20,border:"1px solid var(--border)"}}>
-        {[{id:"marketer",label:"Marketer"},{id:"cliente",label:"Cliente"}].map(m=>(
-          <button key={m.id} onClick={()=>setAppMode(m.id)}
-            style={{flex:1,padding:"6px 8px",borderRadius:7,border:"none",cursor:"pointer",fontSize:11,fontWeight:800,fontFamily:"inherit",transition:"all .2s",background:appMode===m.id?"var(--bg4)":"transparent",color:appMode===m.id?"var(--a2)":"var(--muted)",boxShadow:appMode===m.id?"inset 0 0 0 1px var(--sidebar-border)":"none"}}>
-            {m.label}
-          </button>
-        ))}
+        {[{id:"marketer",label:"Marketer"},{id:"cliente",label:"Cliente"}].map(m=>{
+          const locked = m.id==="marketer" && !auth?.profile?.marketer_unlocked;
+          return (
+            <button key={m.id} onClick={()=>{ if (locked) { showToast && showToast("In attesa di sblocco dal tuo leader","#f59e0b"); return; } setAppMode(m.id); }}
+              title={locked?"In attesa di sblocco dal tuo leader":undefined}
+              style={{flex:1,padding:"6px 8px",borderRadius:7,border:"none",cursor:"pointer",fontSize:11,fontWeight:800,fontFamily:"inherit",transition:"all .2s",background:appMode===m.id&&!locked?"var(--bg4)":"transparent",color:locked?"var(--border2)":appMode===m.id?"var(--a2)":"var(--muted)",boxShadow:appMode===m.id&&!locked?"inset 0 0 0 1px var(--sidebar-border)":"none",opacity:locked?0.6:1}}>
+              {locked?"\ud83d\udd12 ":""}{m.label}
+            </button>
+          );
+        })}
       </div>
 
       {appMode==="marketer" && navs.map(item=>(
@@ -2007,4 +2019,4 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, o
       {activeTab==="profilazione"&&<ProfilazioneTab p={p} onUpdateProfilo={onUpdateProfilo}/>}
     </div>
   );
-}
+}s

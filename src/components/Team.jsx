@@ -492,7 +492,7 @@ function MappaTeam({ downline, dlProspects }) {
 }
 // ══════════════════════════════════════════════════════════════
 
-export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,positions,onOpenProspect,onPositionInTree,onToggleLeader}){
+export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,positions,onOpenProspect,onPositionInTree,onToggleLeader,onToggleMarketer}){
   const[selectedMember,setSelectedMember]=useState(null);
   const[teamFilter,setTeamFilter]=useState("all");
   const[copied,setCopied]=useState(false);
@@ -816,7 +816,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
             {downline.length===0
               ?<div style={{padding:"3rem",textAlign:"center",color:"var(--border2)"}}><div style={{fontSize:36,marginBottom:12}}>{"\u25c8"}</div><p style={{fontSize:14,marginBottom:8}}>Nessun membro ancora</p><p style={{fontSize:12,color:"var(--border2)"}}>Condividi il tuo link referral</p></div>
               :<table style={{width:"100%",borderCollapse:"collapse"}}>
-                <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Membro","Squadra","Prospect","Iscritti","Conv%","BV",...(auth.userId==="720d0d85-b356-46e7-8b27-0e33eeea9ae5"?["Leader"]:[]),"Azione",""].map(h=>(<th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
+                <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Membro","Squadra","Prospect","Iscritti","Conv%","BV",...(auth.userId==="720d0d85-b356-46e7-8b27-0e33eeea9ae5"?["Leader"]:[]),...(auth?.profile?.is_leader?["Marketer"]:[]),"Azione",""].map(h=>(<th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
                 <tbody>{filteredMembers.map(m=>{
                   const mP=getMemberProspects(m.id);
                   const ms=teamStats(mP);
@@ -848,6 +848,14 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
                           <button onClick={()=>onToggleLeader(m.id,!m.is_leader)}
                             style={{padding:"5px 11px",borderRadius:8,border:"1px solid "+(m.is_leader?"#a855f760":"var(--border2)"),cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",background:m.is_leader?"#a855f720":"var(--bg3)",color:m.is_leader?"#c084fc":"var(--muted)"}}>
                             {m.is_leader?" Leader":"Rendi leader"}
+                          </button>
+                        </td>
+                      )}
+                      {auth?.profile?.is_leader && (
+                        <td style={{padding:"12px 16px"}}>
+                          <button onClick={()=>onToggleMarketer(m.id,!m.marketer_unlocked)}
+                            style={{padding:"5px 11px",borderRadius:8,border:"1px solid "+(m.marketer_unlocked?"#10b98160":"var(--border2)"),cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",background:m.marketer_unlocked?"#10b98120":"var(--bg3)",color:m.marketer_unlocked?"#10b981":"var(--muted)"}}>
+                            {m.marketer_unlocked?" Sbloccato":"Sblocca Marketer"}
                           </button>
                         </td>
                       )}
