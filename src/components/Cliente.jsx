@@ -17,7 +17,14 @@ const FASI_ONBOARDING = [
       { label: "WES Stocks Intermedio", url: "https://wowpowers.com/it/catalog/paths/a9779909-3dbe-4880-ac2d-75b9f4c42068" },
     ],
   },
-  { n: 3, titolo: "Fase 3", links: [] },
+  {
+    n: 3,
+    titolo: "Fase 3",
+    links: [
+      { label: "LIVE Enrico", url: "https://wowpowers.com/it/stream-player/enrico/livestream/66107c76-302e-4d66-8c6a-4ce778b994bf?reference=TOP_EDUCATORS" },
+      { label: "WES Stocks Avanzato", url: "https://wowpowers.com/it/path/73d9a573-2465-4e4a-bdd8-2607d5d08958" },
+    ],
+  },
 ];
 
 export function ClienteView({ auth, onUpdateProfile }) {
