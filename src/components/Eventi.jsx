@@ -186,6 +186,28 @@ function Leaderboard({ ranking }) {
   );
 }
 
+// Calcola sinistra/destra di memberId rispetto a un rootId qualsiasi (non solo l'utente loggato)
+function getSquadraRelativeTo(rootId, memberId, allProfiles, positions, cache) {
+  if (memberId === rootId) return null;
+  if (cache[memberId] !== undefined) return cache[memberId];
+  const pos = (positions || []).find(p => p.member_id === memberId && p.upline_id === rootId);
+  if (pos) { cache[memberId] = pos.team; return pos.team; }
+  const member = (allProfiles || []).find(p => p.id === memberId);
+  const parent = member ? (allProfiles || []).find(p => p.id === member.positioned_under) : null;
+  const result = parent && parent.id !== memberId ? getSquadraRelativeTo(rootId, parent.id, allProfiles, positions, cache) : null;
+  cache[memberId] = result;
+  return result;
+}
+// Verifica se memberId e' un discendente di rootId (risalendo positioned_under)
+function isDescendantOf(rootId, memberId, allProfiles, depth) {
+  if (memberId === rootId) return true;
+  if ((depth || 0) > 40) return false;
+  const member = (allProfiles || []).find(p => p.id === memberId);
+  if (!member || !member.positioned_under) return false;
+  if (member.positioned_under === rootId) return true;
+  return isDescendantOf(rootId, member.positioned_under, allProfiles, (depth || 0) + 1);
+}
+
 export function EventiView({ auth, allProfiles, downline, positions, showToast,
   sbListEventi,
   sbListEventoPersone, sbInsertEventoPersona, sbUpdateEventoPersona, sbDeleteEventoPersona,
@@ -197,6 +219,8 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null); // { mode: 'in_ballo'|'venduto', persona }
   const [filtroVenduti, setFiltroVenduti] = useState("tutti"); // 'tutti' | 'team' | 'prospect'
+  const [filtroMembro, setFiltroMembro] = useState(""); // "" = tutti i membri
+  const [membroEspanso, setMembroEspanso] = useState(null);
 
   useEffect(() => {
     if (!auth) return;
@@ -222,31 +246,36 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   );
   const venduti = useMemo(() =>
     persone.filter(p => p.stato === "venduto" && myTeamIds.has(p.user_id)
-      && (filtroVenduti === "tutti" || p.categoria === filtroVenduti)),
-    [persone, myTeamIds, filtroVenduti]
+      && (filtroVenduti === "tutti" || p.categoria === filtroVenduti)
+      && (!filtroMembro || p.user_id === filtroMembro)),
+    [persone, myTeamIds, filtroVenduti, filtroMembro]
   );
 
   // squadra (sinistra/destra) di ogni membro rispetto a chi guarda la pagina
   const squadraOf = useMemo(() => {
     const cache = {};
-    function getTeamForMe(memberId, depth) {
-      if (memberId === auth.userId) return null;
-      if (cache[memberId] !== undefined) return cache[memberId];
-      if (depth > 40) return null; // sicurezza anti-loop su dati incoerenti
-      // controlla PRIMA se questo nodo specifico ha un collegamento diretto con te
-      const pos = (positions || []).find(p => p.member_id === memberId && p.upline_id === auth.userId);
-      if (pos) { cache[memberId] = pos.team; return pos.team; }
-      // altrimenti risali di un livello fisico e riprova da li'
-      const member = (allProfiles || []).find(p => p.id === memberId);
-      const parent = member ? (allProfiles || []).find(p => p.id === member.positioned_under) : null;
-      const result = parent ? getTeamForMe(parent.id, depth + 1) : null;
-      cache[memberId] = result;
-      return result;
-    }
     const map = {};
-    venduti.forEach(p => { map[p.user_id] = getTeamForMe(p.user_id, 0); });
+    venduti.forEach(p => { map[p.user_id] = getSquadraRelativeTo(auth.userId, p.user_id, allProfiles, positions, cache); });
     return map;
   }, [allProfiles, positions, auth.userId, venduti]);
+
+  // per ogni membro della downline: ticket personali, della sua downline sinistra/destra, e totale
+  const membriBreakdown = useMemo(() => {
+    const vendutiTeamPersonali = persone.filter(p => p.stato === "venduto" && myTeamIds.has(p.user_id));
+    return downline.map(m => {
+      const cache = {};
+      let personali = 0, sinistra = 0, destra = 0;
+      vendutiTeamPersonali.forEach(p => {
+        if (p.user_id === m.id) { personali++; return; }
+        if (!isDescendantOf(m.id, p.user_id, allProfiles)) return;
+        const sq = getSquadraRelativeTo(m.id, p.user_id, allProfiles, positions, cache);
+        if (sq === "sinistra") sinistra++;
+        else if (sq === "destra") destra++;
+      });
+      const buyers = vendutiTeamPersonali.filter(p => p.user_id === m.id || isDescendantOf(m.id, p.user_id, allProfiles));
+      return { membro: m, personali, sinistra, destra, totale: personali + sinistra + destra, buyers };
+    }).sort((a, b) => b.totale - a.totale);
+  }, [downline, persone, myTeamIds, allProfiles, positions]);
 
   const vendutiSinistra = useMemo(() => venduti.filter(p => squadraOf[p.user_id] === "sinistra"), [venduti, squadraOf]);
   const vendutiDestra    = useMemo(() => venduti.filter(p => squadraOf[p.user_id] === "destra"), [venduti, squadraOf]);
@@ -431,6 +460,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
 
           {/* In ballo + venduti */}
           {evCorrente && (
+            <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -454,11 +484,18 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#10b981", textTransform: "uppercase", letterSpacing: .6 }}>Ticket venduti</div>
                     <div style={{ fontSize: 30, fontWeight: 900, color: "#10b981", lineHeight: 1.1 }}>{venduti.length}</div>
                   </div>
-                  <select value={filtroVenduti} onChange={e => setFiltroVenduti(e.target.value)} style={{ width: "auto", minWidth: 130, fontSize: 12 }}>
-                    <option value="tutti">Tutti</option>
-                    <option value="team">Solo team</option>
-                    <option value="prospect">Solo prospect</option>
-                  </select>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <select value={filtroMembro} onChange={e => setFiltroMembro(e.target.value)} style={{ width: "auto", minWidth: 130, fontSize: 12 }}>
+                      <option value="">Tutti i membri</option>
+                      <option value={auth.userId}>Solo i miei</option>
+                      {downline.map(m => <option key={m.id} value={m.id}>{m.nome || ""} {m.cognome || ""}</option>)}
+                    </select>
+                    <select value={filtroVenduti} onChange={e => setFiltroVenduti(e.target.value)} style={{ width: "auto", minWidth: 130, fontSize: 12 }}>
+                      <option value="tutti">Tutti</option>
+                      <option value="team">Solo team</option>
+                      <option value="prospect">Solo prospect</option>
+                    </select>
+                  </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                   <div style={{ flex: 1, background: "var(--a1-13)", border: "1px solid var(--a1-25)", borderRadius: 9, padding: "6px 10px", textAlign: "center" }}>
@@ -478,6 +515,47 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
                 </div>
               </div>
             </div>
+
+            {/* Ticket per membro del team */}
+            <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem", marginTop: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text)", marginBottom: 12 }}>Ticket per membro del team</div>
+              {membriBreakdown.length === 0
+                ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>Nessun membro nella downline</div>
+                : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    {membriBreakdown.map(x => {
+                      const isOpen = membroEspanso === x.membro.id;
+                      return (
+                        <div key={x.membro.id} style={{ background: "var(--bg3)", border: "1px solid " + (isOpen ? "var(--a1-25)" : "var(--border)"), borderRadius: 10, overflow: "hidden" }}>
+                          <button onClick={() => setMembroEspanso(isOpen ? null : x.membro.id)}
+                            style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 13px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
+                            <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {x.membro.nome || ""} {x.membro.cognome || ""}
+                            </div>
+                            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                              <span title="Personali" style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", background: "var(--bg4)", borderRadius: 6, padding: "3px 7px" }}>Personali {x.personali}</span>
+                              <span title="Downline sinistra" style={{ fontSize: 10, fontWeight: 700, color: "var(--a2)", background: "var(--a1-13)", borderRadius: 6, padding: "3px 7px" }}>Sx {x.sinistra}</span>
+                              <span title="Downline destra" style={{ fontSize: 10, fontWeight: 700, color: "#10b981", background: "#10b98118", borderRadius: 6, padding: "3px 7px" }}>Dx {x.destra}</span>
+                              <span title="Totale" style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: "linear-gradient(135deg,var(--a1),var(--a2))", borderRadius: 6, padding: "3px 8px" }}>Tot {x.totale}</span>
+                            </div>
+                            <span style={{ color: "var(--muted)", fontSize: 16, transform: isOpen ? "rotate(90deg)" : "none", transition: "transform .2s", flexShrink: 0 }}>{"\u203a"}</span>
+                          </button>
+                          {isOpen && (
+                            <div style={{ padding: "0 13px 13px 13px", display: "flex", flexDirection: "column", gap: 6 }}>
+                              {x.buyers.length === 0
+                                ? <div style={{ fontSize: 11, color: "var(--border2)", padding: "6px 0" }}>Nessun ticket venduto in questa downline</div>
+                                : x.buyers.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner onClick={() => canEdit(p) && setModal({ persona: p })} />)
+                              }
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              }
+            </div>
+            </>
           )}
         </>
       )}
