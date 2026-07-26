@@ -587,6 +587,7 @@ export default function App() {
   const [positions, setPositions] = useState([]);
   const [dashMode, setDashMode]   = useState("personale");
   const [sidebarMode, setSidebarMode] = useState("tutti");
+  const [appMode, setAppMode] = useState("marketer"); // "marketer" | "cliente"
   const [listaMode, setListaMode] = useState("personale");
 
   useEffect(()=>{
@@ -1065,20 +1066,30 @@ export default function App() {
 
       <MentoreChatWidget insights={mentoreInsights} />
 
-      <Sidebar view={view} setView={setView} data={data} urgenti={urgenti} onAdd={openAdd} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downline.length} sidebarMode={sidebarMode} setSidebarMode={setSidebarMode} />
+      <Sidebar view={view} setView={setView} data={data} urgenti={urgenti} onAdd={openAdd} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downline.length} sidebarMode={sidebarMode} setSidebarMode={setSidebarMode} appMode={appMode} setAppMode={setAppMode} />
 
       <main className="mc" style={{flex:1,overflowY:"auto",height:"100vh",paddingBottom:0}}>
-        {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} />}
-        {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale")setFMembro("");}} hasTeam={dlProspects.length>0} />}
-        {view==="stats"   && <Statistiche data={data} dlProspects={dlProspects} />}
-        {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} />}
-        {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} />}
-        {view==="eventi"  && <EventiView auth={auth} allProfiles={allProfiles} downline={downline} positions={positions} showToast={showToast}
-          sbListEventi={sbListEventi}
-          sbListEventoPersone={sbListEventoPersone} sbInsertEventoPersona={sbInsertEventoPersona}
-          sbUpdateEventoPersona={sbUpdateEventoPersona} sbDeleteEventoPersona={sbDeleteEventoPersona}
-          LUDOVICO_ID={LUDOVICO_ID} onTicketCountChange={setTicketVendutiCount} />}
-        {view==="profilo" && <ProfiloView auth={auth} onUpdateProfile={updateProfile} downlineCount={downline.length} showToast={showToast} />}
+        {appMode==="cliente" ? (
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",padding:"2rem",textAlign:"center"}}>
+            <div style={{width:64,height:64,borderRadius:16,background:"var(--a1-13)",border:"1px solid var(--a1-25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20,fontSize:26}}></div>
+            <div style={{fontSize:18,fontWeight:800,color:"var(--text)",marginBottom:8}}>Sezione Cliente</div>
+            <div style={{fontSize:13,color:"var(--muted)",maxWidth:340,lineHeight:1.6}}>Questa sezione è in costruzione — presto qui troverai le funzionalità dedicate ai clienti.</div>
+          </div>
+        ) : (
+          <>
+            {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} />}
+            {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale")setFMembro("");}} hasTeam={dlProspects.length>0} />}
+            {view==="stats"   && <Statistiche data={data} dlProspects={dlProspects} />}
+            {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} />}
+            {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} />}
+            {view==="eventi"  && <EventiView auth={auth} allProfiles={allProfiles} downline={downline} positions={positions} showToast={showToast}
+              sbListEventi={sbListEventi}
+              sbListEventoPersone={sbListEventoPersone} sbInsertEventoPersona={sbInsertEventoPersona}
+              sbUpdateEventoPersona={sbUpdateEventoPersona} sbDeleteEventoPersona={sbDeleteEventoPersona}
+              LUDOVICO_ID={LUDOVICO_ID} onTicketCountChange={setTicketVendutiCount} />}
+            {view==="profilo" && <ProfiloView auth={auth} onUpdateProfile={updateProfile} downlineCount={downline.length} showToast={showToast} />}
+          </>
+        )}
       </main>
 
       {/* Mobile bottom nav - shown via CSS on mobile only */}
@@ -1121,7 +1132,7 @@ export default function App() {
 }
 
 //  SIDEBAR 
-function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout, downlineCount, sidebarMode, setSidebarMode }) {
+function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout, downlineCount, sidebarMode, setSidebarMode, appMode, setAppMode }) {
   const navs = [
     { id:"dash",    icon:"", label:"Dashboard" },
     { id:"lista",   icon:"", label:"Prospect", badge:data.length },
@@ -1133,11 +1144,20 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
   ];
   return (
     <aside className="sb" style={{width:222,minWidth:222,background:"var(--bg2)",borderRight:"1px solid #11203a",padding:"1.5rem .9rem",display:"flex",flexDirection:"column",gap:4,height:"100vh",overflowY:"auto"}}>
-      <div style={{marginBottom:24,paddingLeft:4}}>
+      <div style={{marginBottom:14,paddingLeft:4}}>
         <div style={{fontWeight:900,fontSize:15,color:"var(--text)",lineHeight:1.2}}>Kairos CRM</div>
       </div>
 
-      {navs.map(item=>(
+      <div style={{display:"flex",background:"var(--bg3)",borderRadius:9,padding:3,marginBottom:20,border:"1px solid var(--border)"}}>
+        {[{id:"marketer",label:"Marketer"},{id:"cliente",label:"Cliente"}].map(m=>(
+          <button key={m.id} onClick={()=>setAppMode(m.id)}
+            style={{flex:1,padding:"6px 8px",borderRadius:7,border:"none",cursor:"pointer",fontSize:11,fontWeight:800,fontFamily:"inherit",transition:"all .2s",background:appMode===m.id?"var(--bg4)":"transparent",color:appMode===m.id?"var(--a2)":"var(--muted)",boxShadow:appMode===m.id?"inset 0 0 0 1px var(--sidebar-border)":"none"}}>
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {appMode==="marketer" && navs.map(item=>(
         <button key={item.id} onClick={()=>setView(item.id)}
           style={{display:"flex",alignItems:"center",gap:9,width:"100%",padding:"10px 12px",background:view===item.id?"var(--bg4)":"transparent",boxShadow:view===item.id?"inset 0 0 0 1px var(--sidebar-border)":"none",color:view===item.id?"var(--a2)":"var(--muted)",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,textAlign:"left",border:"none",transition:"all .2s"}}>
           <span>{item.icon}</span>{item.label}
@@ -1145,21 +1165,26 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
         </button>
       ))}
 
+      {appMode==="marketer" && (
       <button onClick={onAdd} style={{marginTop:14,padding:"10px",fontSize:13,fontWeight:800,background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:10,cursor:"pointer"}}>
         + Nuovo Prospect
       </button>
+      )}
 
-      {urgenti.length>0 && (
+      {appMode==="marketer" && urgenti.length>0 && (
         <button onClick={()=>setView("dash")} className="pulse" style={{marginTop:8,background:"#ef444412",border:"1px solid #ef444435",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8,color:"#f87171",fontSize:12,fontWeight:700,width:"100%",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
            {urgenti.length} urgent{urgenti.length===1?"e":"i"}
         </button>
       )}
 
+      {appMode==="marketer" && (
       <div style={{borderTop:"1px solid #11203a",paddingTop:14,marginTop:16,display:"flex",flexDirection:"column",gap:7}}>
         <div style={{fontSize:10,fontWeight:800,color:"var(--border2)",textTransform:"uppercase",letterSpacing:1.2,marginBottom:2}}>Backup</div>
         <button onClick={onExport} style={{padding:"8px 10px",background:"var(--bg4)",color:"var(--a2)",border:"1px solid var(--border2)",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12,textAlign:"left"}}> Esporta JSON</button>
       </div>
+      )}
 
+      {appMode==="marketer" && (
       <div style={{marginTop:14,borderTop:"1px solid var(--border)",paddingTop:14}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
           <div style={{fontSize:10,fontWeight:800,color:"var(--border2)",textTransform:"uppercase",letterSpacing:1.2}}>Totale ora</div>
@@ -1186,6 +1211,7 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
           );
         })}
       </div>
+      )}
 
       <div style={{marginTop:"auto",paddingTop:14,borderTop:"1px solid #11203a"}}>
         <div style={{fontSize:10,color:"var(--muted)",marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{auth?.email}</div>
