@@ -25,6 +25,14 @@ const FASI_ONBOARDING = [
       { label: "WES Stocks Avanzato", url: "https://wowpowers.com/it/path/73d9a573-2465-4e4a-bdd8-2607d5d08958" },
     ],
   },
+  {
+    n: 4,
+    titolo: "Fase 4",
+    links: [
+      { label: "Psicologia, basi e PAC - Click", url: "https://www.myclick.space/c/be-servizi-ita/sections/1099195/lessons/4189638" },
+      { label: "Onboarding SGM", url: "https://wowpowers.com/it/stream-player/marco_p/livestream/1f5e6f30-5cd8-4522-98a5-e254fff735dd" },
+    ],
+  },
 ];
 
 export function ClienteView({ auth, onUpdateProfile }) {
