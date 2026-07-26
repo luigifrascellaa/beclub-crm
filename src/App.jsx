@@ -363,7 +363,17 @@ function AuthScreen({ onAuth }) {
       try {
         const session = JSON.parse(saved);
         if (session.token && session.userId) {
+          // Ripristina subito con i dati in cache (niente attesa), poi aggiorna il profilo con la versione fresca dal database
+          // Necessario perche' un leader potrebbe aver sbloccato/promosso l'account da un altro dispositivo/sessione
           onAuth({ token:session.token, userId:session.userId, email:session.email, profile:session.profile||null });
+          sbGetProfile(session.token, session.userId).then(rows => {
+            if (rows && rows[0]) {
+              const freshProfile = rows[0];
+              const updatedSession = { token:session.token, userId:session.userId, email:session.email, profile:freshProfile };
+              onAuth(updatedSession);
+              localStorage.setItem("becrm_session", JSON.stringify(updatedSession));
+            }
+          }).catch(()=>{});
         }
       } catch(e) { localStorage.removeItem("becrm_session"); }
     }
