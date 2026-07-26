@@ -322,6 +322,8 @@ function AuthScreen({ onAuth }) {
   const [cognome, setCognome] = useState("");
   const [remember, setRemember] = useState(true);
   const [recoveryToken, setRecoveryToken] = useState(null);
+  const [sponsorCode, setSponsorCode] = useState("");
+  const [hasPendingRef, setHasPendingRef] = useState(false);
   const [newPass, setNewPass]   = useState("");
   const [newPass2, setNewPass2] = useState("");
 
@@ -333,6 +335,13 @@ function AuthScreen({ onAuth }) {
       localStorage.setItem("pending_ref", ref);
       localStorage.setItem("pending_ref_expires", Date.now() + 10 * 60 * 1000);
       setMode("signup");
+    }
+
+    // Verifica se esiste un referral valido (da link o da una visita precedente non scaduta)
+    const existingRef = localStorage.getItem("pending_ref");
+    const existingExpires = localStorage.getItem("pending_ref_expires");
+    if (existingRef && existingExpires && Date.now() < Number(existingExpires)) {
+      setHasPendingRef(true);
     }
 
     // Rileva il link di recupero password (Supabase lo passa nell'URL hash)
@@ -385,6 +394,7 @@ function AuthScreen({ onAuth }) {
   async function submit() {
     if (!email.trim() || !pass.trim()) { setErr("Compila email e password"); return; }
     if (mode === "signup" && (!nome.trim() || !cognome.trim())) { setErr("Compila nome e cognome"); return; }
+    if (mode === "signup" && !hasPendingRef && !sponsorCode.trim()) { setErr("Inserisci il codice sponsor — non puoi registrarti senza."); return; }
     setLoading(true); setErr(""); setMsg("");
     try {
       if (mode === "signup") {
@@ -398,6 +408,15 @@ function AuthScreen({ onAuth }) {
           if (pendingRef && pendingExpires && Date.now() < Number(pendingExpires)) {
             const profiles = await sbGetProfileByRef(tok, pendingRef);
             if (profiles && profiles.length > 0) uplineId = profiles[0].id;
+          } else if (sponsorCode.trim()) {
+            const profiles = await sbGetProfileByRef(tok, sponsorCode.trim().toLowerCase());
+            if (profiles && profiles.length > 0) {
+              uplineId = profiles[0].id;
+            } else {
+              setErr("Codice sponsor non valido. Controlla il codice e riprova.");
+              setLoading(false);
+              return;
+            }
           }
           localStorage.removeItem("pending_ref");
           localStorage.removeItem("pending_ref_expires");
@@ -474,6 +493,20 @@ function AuthScreen({ onAuth }) {
                 <label style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"}}>Cognome *</label>
                 <input value={cognome} onChange={e=>setCognome(e.target.value)} placeholder="Rossi" />
               </div>
+            </div>
+          )}
+
+          {mode==="signup" && !hasPendingRef && (
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"}}>Codice Sponsor *</label>
+              <input value={sponsorCode} onChange={e=>setSponsorCode(e.target.value)} placeholder="es. mario.rossi_a1b2c" />
+              <div style={{fontSize:11,color:"var(--muted)",marginTop:5,lineHeight:1.4}}>Chiedi il codice a chi ti ha invitato nel team — lo trova nella sua sezione Profilo.</div>
+            </div>
+          )}
+
+          {mode==="signup" && hasPendingRef && (
+            <div style={{background:"#10b98115",border:"1px solid #10b98130",borderRadius:9,padding:"9px 13px",fontSize:12,color:"#10b981"}}>
+              Sponsor riconosciuto automaticamente dal link di invito.
             </div>
           )}
 
