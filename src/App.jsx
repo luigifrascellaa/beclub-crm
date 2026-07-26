@@ -5,6 +5,7 @@ import { ProfiloView } from "./components/Profilo";
 import { ListaNomiView } from "./components/ListaNomi";
 import { EventiView } from "./components/Eventi";
 import { computeMentoreInsights, ConsigliCard, MentoreChatWidget } from "./components/Mentore";
+import { ClienteView } from "./components/Cliente";
 
 const SB_URL = "https://kuxrpbsvnkxhsicbyupp.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1eHJwYnN2bmt4aHNpY2J5dXBwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNzMwODIsImV4cCI6MjA5NzY0OTA4Mn0.s_lqOUC8939I2Wgf-Qkcq9WaiH1Nxze1uv4-PIV6s7I";
@@ -1070,11 +1071,7 @@ export default function App() {
 
       <main className="mc" style={{flex:1,overflowY:"auto",height:"100vh",paddingBottom:0}}>
         {appMode==="cliente" ? (
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",padding:"2rem",textAlign:"center"}}>
-            <div style={{width:64,height:64,borderRadius:16,background:"var(--a1-13)",border:"1px solid var(--a1-25)",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20,fontSize:26}}></div>
-            <div style={{fontSize:18,fontWeight:800,color:"var(--text)",marginBottom:8}}>Sezione Cliente</div>
-            <div style={{fontSize:13,color:"var(--muted)",maxWidth:340,lineHeight:1.6}}>Questa sezione è in costruzione — presto qui troverai le funzionalità dedicate ai clienti.</div>
-          </div>
+          <ClienteView auth={auth} onUpdateProfile={updateProfile} />
         ) : (
           <>
             {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} />}
