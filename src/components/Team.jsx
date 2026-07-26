@@ -204,6 +204,9 @@ function buildTreeData(memberId, memberNome, memberCognome, memberEmail, allMemb
   const de = children.filter(m => getPos(m.id, memberId) === "destra");
   const mP = dlProspects.filter(p => p._userId === memberId);
   const ms = teamStats(mP);
+  const fullMember = allMembers.find(m => m.id === memberId);
+  const isLeader = fullMember?.is_leader || false;
+  const marketerUnlocked = fullMember?.marketer_unlocked || false;
 
   const leftChild = sin.length > 0
     ? buildTreeData(sin[0].id, sin[0].nome, sin[0].cognome, sin[0].email, allMembers, dlProspects, positions, depth + 1, "sinistra")
@@ -214,7 +217,7 @@ function buildTreeData(memberId, memberNome, memberCognome, memberEmail, allMemb
 
   return {
     id: memberId, nome: memberNome, cognome: memberCognome, email: memberEmail,
-    depth, side, isRoot: depth === 0, ms,
+    depth, side, isRoot: depth === 0, ms, isLeader, marketerUnlocked,
     left: leftChild, right: rightChild,
   };
 }
@@ -262,7 +265,7 @@ function flattenTree(node, nodes, edges, parentPx) {
     nodes.push({ type: "empty", x: px.x, y: px.y, side: node.side, parentId: node.id.replace(/^empty-(sin|de)-/, "") });
     return;
   }
-  nodes.push({ type: "member", x: px.x, y: px.y, id: node.id, nome: node.nome, cognome: node.cognome, email: node.email, isRoot: node.isRoot, ms: node.ms, side: node.side });
+  nodes.push({ type: "member", x: px.x, y: px.y, id: node.id, nome: node.nome, cognome: node.cognome, email: node.email, isRoot: node.isRoot, ms: node.ms, side: node.side, isLeader: node.isLeader, marketerUnlocked: node.marketerUnlocked });
   flattenTree(node.left, nodes, edges, px);
   flattenTree(node.right, nodes, edges, px);
 }
@@ -323,6 +326,7 @@ function TreeCanvas({ memberId, memberNome, memberCognome, memberEmail, allMembe
           );
         }
         const labelColor = n.side === "sinistra" ? "var(--a1)" : n.side === "destra" ? "#10b981" : null;
+        const isClienteOnly = !n.isRoot && !(n.isLeader || n.marketerUnlocked);
         return (
           <div key={n.id} style={{ position: "absolute", left, top: n.y, width: NODE_W, display: "flex", flexDirection: "column", alignItems: "center" }}>
             {labelColor && (
@@ -332,13 +336,13 @@ function TreeCanvas({ memberId, memberNome, memberCognome, memberEmail, allMembe
             )}
             <div onClick={() => !n.isRoot && onSelect && onSelect(allMembers.find(m => m.id === n.id))}
               style={{
-                background: n.isRoot ? "linear-gradient(135deg,var(--a1),var(--a2))" : "var(--bg4)",
-                border: "2px solid " + (n.isRoot ? "var(--a1)" : "var(--border2)"),
+                background: n.isRoot ? "linear-gradient(135deg,var(--a1),var(--a2))" : isClienteOnly ? "#4ade8016" : "var(--bg4)",
+                border: "2px solid " + (n.isRoot ? "var(--a1)" : isClienteOnly ? "#4ade8065" : "var(--border2)"),
                 borderRadius: 12, padding: "10px 14px", textAlign: "center",
                 cursor: n.isRoot ? "default" : "pointer", width: NODE_W - 8,
                 boxShadow: n.isRoot ? "0 0 20px var(--a1-25)" : "none",
               }}>
-              <div style={{ fontWeight: 800, fontSize: 12, color: n.isRoot ? "#fff" : "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <div style={{ fontWeight: 800, fontSize: 12, color: n.isRoot ? "#fff" : isClienteOnly ? "#4ade80" : "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {n.nome || n.email} {n.cognome || ""}
               </div>
               {!n.isRoot && <div style={{ fontSize: 10, color: n.isRoot ? "rgba(255,255,255,.8)" : "var(--muted)", marginTop: 2 }}>{n.ms.sub} iscr {"\u00b7"} {n.ms.bv} BV</div>}
