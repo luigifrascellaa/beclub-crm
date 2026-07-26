@@ -221,6 +221,8 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   const [filtroVenduti, setFiltroVenduti] = useState("tutti"); // 'tutti' | 'team' | 'prospect'
   const [filtroMembro, setFiltroMembro] = useState(""); // "" = tutti i membri
   const [membroEspanso, setMembroEspanso] = useState(null);
+  const [cercaMembro, setCercaMembro] = useState("");
+  const [soloLeader, setSoloLeader] = useState(false);
 
   useEffect(() => {
     if (!auth) return;
@@ -276,6 +278,18 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
       return { membro: m, personali, sinistra, destra, totale: personali + sinistra + destra, buyers };
     }).sort((a, b) => b.totale - a.totale);
   }, [downline, persone, myTeamIds, allProfiles, positions]);
+
+  const membriBreakdownFiltrati = useMemo(() => {
+    const q = cercaMembro.trim().toLowerCase();
+    return membriBreakdown.filter(x => {
+      if (soloLeader && !x.membro.is_leader) return false;
+      if (q) {
+        const nomeCompleto = ((x.membro.nome || "") + " " + (x.membro.cognome || "")).toLowerCase();
+        if (!nomeCompleto.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [membriBreakdown, cercaMembro, soloLeader]);
 
   const vendutiSinistra = useMemo(() => venduti.filter(p => squadraOf[p.user_id] === "sinistra"), [venduti, squadraOf]);
   const vendutiDestra    = useMemo(() => venduti.filter(p => squadraOf[p.user_id] === "destra"), [venduti, squadraOf]);
@@ -518,12 +532,21 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
 
             {/* Ticket per membro del team */}
             <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem", marginTop: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text)", marginBottom: 12 }}>Ticket per membro del team</div>
-              {membriBreakdown.length === 0
-                ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>Nessun membro nella downline</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 10, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text)" }}>Ticket per membro del team</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input value={cercaMembro} onChange={e => setCercaMembro(e.target.value)} placeholder="Cerca per nome..." style={{ width: "auto", minWidth: 150, fontSize: 12 }} />
+                  <select value={soloLeader ? "leader" : "tutti"} onChange={e => setSoloLeader(e.target.value === "leader")} style={{ width: "auto", minWidth: 110, fontSize: 12 }}>
+                    <option value="tutti">Tutti</option>
+                    <option value="leader">Solo leader</option>
+                  </select>
+                </div>
+              </div>
+              {membriBreakdownFiltrati.length === 0
+                ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>Nessun membro trovato</div>
                 : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                    {membriBreakdown.map(x => {
+                    {membriBreakdownFiltrati.map(x => {
                       const isOpen = membroEspanso === x.membro.id;
                       return (
                         <div key={x.membro.id} style={{ background: "var(--bg3)", border: "1px solid " + (isOpen ? "var(--a1-25)" : "var(--border)"), borderRadius: 10, overflow: "hidden" }}>
