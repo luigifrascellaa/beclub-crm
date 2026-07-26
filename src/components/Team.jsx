@@ -175,7 +175,7 @@ function PanZoomTree({ children }) {
         </div>
       </div>
 
-      <div style={{ position: "absolute", bottom: 12, right: 12, display: "flex", flexDirection: "column", gap: 6, background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 10, padding: 6 }}>
+      <div style={{ position: "absolute", top: 12, right: 12, display: "flex", flexDirection: "column", gap: 6, background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 10, padding: 6, zIndex: 50 }}>
         <button onClick={() => zoomBy(0.15)} style={{ width: 32, height: 32, borderRadius: 7, border: "1px solid var(--border2)", background: "var(--bg4)", color: "var(--text)", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>+</button>
         <button onClick={() => zoomBy(-0.15)} style={{ width: 32, height: 32, borderRadius: 7, border: "1px solid var(--border2)", background: "var(--bg4)", color: "var(--text)", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>{"\u2212"}</button>
         <button onClick={resetView} style={{ width: 32, height: 32, borderRadius: 7, border: "1px solid var(--border2)", background: "var(--bg4)", color: "var(--muted)", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>{"\u27f3"}</button>
