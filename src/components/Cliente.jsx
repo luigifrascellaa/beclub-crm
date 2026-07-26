@@ -9,7 +9,14 @@ const FASI_ONBOARDING = [
       { label: "Applicazioni da scaricare", url: "https://linktr.ee/applicazionidascaricare" },
     ],
   },
-  { n: 2, titolo: "Fase 2", links: [] },
+  {
+    n: 2,
+    titolo: "Fase 2",
+    links: [
+      { label: "WES Stocks Base", url: "https://wowpowers.com/it/path/f373ccd8-44de-4c8e-bccc-c8cf094d45ae" },
+      { label: "WES Stocks Intermedio", url: "https://wowpowers.com/it/catalog/paths/a9779909-3dbe-4880-ac2d-75b9f4c42068" },
+    ],
+  },
   { n: 3, titolo: "Fase 3", links: [] },
 ];
 
