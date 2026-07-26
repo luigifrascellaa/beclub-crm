@@ -1111,7 +1111,7 @@ export default function App() {
       <Sidebar view={view} setView={setView} data={data} urgenti={urgenti} onAdd={openAdd} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downline.length} sidebarMode={sidebarMode} setSidebarMode={setSidebarMode} appMode={appMode} setAppMode={setAppMode} showToast={showToast} />
 
       <main className="mc" style={{flex:1,overflowY:"auto",height:"100vh",paddingBottom:0}}>
-        {(appMode==="cliente" || !auth?.profile?.marketer_unlocked) ? (
+        {(appMode==="cliente" || !(auth?.profile?.marketer_unlocked || auth?.profile?.is_leader)) ? (
           <ClienteView auth={auth} onUpdateProfile={updateProfile} />
         ) : (
           <>
@@ -1171,6 +1171,7 @@ export default function App() {
 
 //  SIDEBAR 
 function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout, downlineCount, sidebarMode, setSidebarMode, appMode, setAppMode, showToast }) {
+  const marketerAllowed = !!(auth?.profile?.marketer_unlocked || auth?.profile?.is_leader);
   const navs = [
     { id:"dash",    icon:"", label:"Dashboard" },
     { id:"lista",   icon:"", label:"Prospect", badge:data.length },
@@ -1188,7 +1189,7 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
 
       <div style={{display:"flex",background:"var(--bg3)",borderRadius:9,padding:3,marginBottom:20,border:"1px solid var(--border)"}}>
         {[{id:"marketer",label:"Marketer"},{id:"cliente",label:"Cliente"}].map(m=>{
-          const locked = m.id==="marketer" && !auth?.profile?.marketer_unlocked;
+          const locked = m.id==="marketer" && !marketerAllowed;
           return (
             <button key={m.id} onClick={()=>{ if (locked) { showToast && showToast("In attesa di sblocco dal tuo leader","#f59e0b"); return; } setAppMode(m.id); }}
               title={locked?"In attesa di sblocco dal tuo leader":undefined}
@@ -1199,7 +1200,7 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
         })}
       </div>
 
-      {appMode==="marketer" && navs.map(item=>(
+      {appMode==="marketer" && marketerAllowed && navs.map(item=>(
         <button key={item.id} onClick={()=>setView(item.id)}
           style={{display:"flex",alignItems:"center",gap:9,width:"100%",padding:"10px 12px",background:view===item.id?"var(--bg4)":"transparent",boxShadow:view===item.id?"inset 0 0 0 1px var(--sidebar-border)":"none",color:view===item.id?"var(--a2)":"var(--muted)",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,textAlign:"left",border:"none",transition:"all .2s"}}>
           <span>{item.icon}</span>{item.label}
@@ -1207,26 +1208,26 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
         </button>
       ))}
 
-      {appMode==="marketer" && (
+      {appMode==="marketer" && marketerAllowed && (
       <button onClick={onAdd} style={{marginTop:14,padding:"10px",fontSize:13,fontWeight:800,background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:10,cursor:"pointer"}}>
         + Nuovo Prospect
       </button>
       )}
 
-      {appMode==="marketer" && urgenti.length>0 && (
+      {appMode==="marketer" && marketerAllowed && urgenti.length>0 && (
         <button onClick={()=>setView("dash")} className="pulse" style={{marginTop:8,background:"#ef444412",border:"1px solid #ef444435",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8,color:"#f87171",fontSize:12,fontWeight:700,width:"100%",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
            {urgenti.length} urgent{urgenti.length===1?"e":"i"}
         </button>
       )}
 
-      {appMode==="marketer" && (
+      {appMode==="marketer" && marketerAllowed && (
       <div style={{borderTop:"1px solid #11203a",paddingTop:14,marginTop:16,display:"flex",flexDirection:"column",gap:7}}>
         <div style={{fontSize:10,fontWeight:800,color:"var(--border2)",textTransform:"uppercase",letterSpacing:1.2,marginBottom:2}}>Backup</div>
         <button onClick={onExport} style={{padding:"8px 10px",background:"var(--bg4)",color:"var(--a2)",border:"1px solid var(--border2)",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12,textAlign:"left"}}> Esporta JSON</button>
       </div>
       )}
 
-      {appMode==="marketer" && (
+      {appMode==="marketer" && marketerAllowed && (
       <div style={{marginTop:14,borderTop:"1px solid var(--border)",paddingTop:14}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
           <div style={{fontSize:10,fontWeight:800,color:"var(--border2)",textTransform:"uppercase",letterSpacing:1.2}}>Totale ora</div>
