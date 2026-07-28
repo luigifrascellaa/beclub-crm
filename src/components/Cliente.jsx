@@ -219,12 +219,32 @@ function OnboardingClassico({ auth, onUpdateProfile }) {
 
 function OnboardingAlt({ auth, onUpdateProfile }) {
   // onboarding_step qui ha solo 2 stati significativi: 1 = solo "ON BOARDING START"
-  // sbloccato, 2 = tutto sbloccato. Stesso campo DB usato da OnboardingClassico, ma
-  // senza conflitto perche' ogni utente vede sempre e solo uno dei due percorsi.
+  // sbloccato, 2 = tutto sbloccato (INTRODUZIONE NETWORK + PERCORSO TRADING). Stesso
+  // campo DB usato da OnboardingClassico, senza conflitto perche' ogni utente vede
+  // sempre e solo uno dei due percorsi.
+  //
+  // Il progresso PIU' IN PROFONDITA' (quale sottocartella e' sbloccata dentro
+  // INTRODUZIONE NETWORK / PERCORSO TRADING, e quali link sono stati aperti) vive
+  // SOLO in questo state locale, non e' salvato su Supabase: si azzera al
+  // reload/logout. Se in futuro serve che sopravviva tra sessioni, va aggiunta una
+  // colonna jsonb tipo profiles.onboarding_progress - non l'ho fatto qui per non
+  // introdurre un cambio di schema non richiesto.
   const step = auth?.profile?.onboarding_step || 1;
   const sbloccatoTutto = step >= 2;
   const [openId, setOpenId] = useState(sbloccatoTutto ? null : 1);
+
+  // Click sui link di "ON BOARDING START" (keyed by indice link)
+  const [linkClickati, setLinkClickati] = useState({});
+  const linksFase1 = FASI_ONBOARDING_ALT[0].links;
+  const tuttiClickatiFase1 = linksFase1.every((_, i) => linkClickati[i]);
+
+  // Per INTRODUZIONE NETWORK e PERCORSO TRADING (f.n con sottocartelle):
+  // - subStep[n] = indice della sottocartella piu' avanzata sbloccata (0-based, default 0)
+  // - openSub["n-idx"] = se quella sottocartella e' espansa
+  // - subLinkClickati["n-idx-linkIdx"] = se quel link e' stato aperto
+  const [subStep, setSubStep] = useState({});
   const [openSub, setOpenSub] = useState({});
+  const [subLinkClickati, setSubLinkClickati] = useState({});
 
   function toggleFase(n) {
     const sbloccata = n === 1 || sbloccatoTutto;
@@ -232,14 +252,39 @@ function OnboardingAlt({ auth, onUpdateProfile }) {
     setOpenId(prev => prev === n ? null : n);
   }
 
+  function segnaLinkClickato(i) {
+    setLinkClickati(prev => ({ ...prev, [i]: true }));
+  }
+
+  function completaStart() {
+    if (!tuttiClickatiFase1) return; // sicurezza extra, il bottone e' comunque disabilitato
+    onUpdateProfile({ onboarding_step: 2 });
+    setOpenId(2);
+  }
+
+  function subSbloccata(n, idx) {
+    return idx <= (subStep[n] || 0);
+  }
+
   function toggleSub(n, idx) {
+    if (!subSbloccata(n, idx)) return;
     const key = n + "-" + idx;
     setOpenSub(prev => ({ ...prev, [key]: !prev[key] }));
   }
 
-  function completaStart() {
-    onUpdateProfile({ onboarding_step: 2 });
-    setOpenId(2);
+  function segnaSubLinkClickato(n, idx, li) {
+    setSubLinkClickati(prev => ({ ...prev, [n + "-" + idx + "-" + li]: true }));
+  }
+
+  function subTuttiClickati(n, idx, links) {
+    return links.every((_, li) => subLinkClickati[n + "-" + idx + "-" + li]);
+  }
+
+  function completaSub(n, idx, totaleSottocartelle) {
+    setSubStep(prev => ({ ...prev, [n]: Math.max(prev[n] || 0, idx + 1) }));
+    if (idx + 1 < totaleSottocartelle) {
+      setOpenSub(prev => ({ ...prev, [n + "-" + idx]: false, [n + "-" + (idx + 1)]: true }));
+    }
   }
 
   return (
@@ -252,7 +297,9 @@ function OnboardingAlt({ auth, onUpdateProfile }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {FASI_ONBOARDING_ALT.map(f => {
           const sbloccata = f.n === 1 || sbloccatoTutto;
-          const completata = f.n === 1 && sbloccatoTutto;
+          const completata = f.n === 1
+            ? sbloccatoTutto
+            : (f.sottocartelle ? (subStep[f.n] || 0) >= f.sottocartelle.length - 1 : false);
           const isOpen = openId === f.n;
 
           return (
@@ -286,42 +333,117 @@ function OnboardingAlt({ auth, onUpdateProfile }) {
               {isOpen && (
                 <div style={{ padding: "0 18px 18px 18px" }}>
                   {f.links && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: f.n === 1 ? 14 : 0 }}>
-                      {f.links.map((l, i) => (
-                        <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
-                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: "var(--bg3)", border: "1px solid var(--border2)", borderRadius: 10, color: "var(--a2)", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
-                          {l.label}
-                          <span style={{ color: "var(--muted)", fontSize: 14 }}>{"\u2197"}</span>
-                        </a>
-                      ))}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
+                      {f.links.map((l, i) => {
+                        const clickato = !!linkClickati[i];
+                        return (
+                          <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
+                            onClick={() => segnaLinkClickato(i)}
+                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: "var(--bg3)", border: "1px solid var(--border2)", borderRadius: 10, color: "var(--a2)", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{
+                                width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                fontSize: 10, fontWeight: 800,
+                                background: clickato ? "#10b98130" : "var(--bg2)",
+                                border: "1px solid " + (clickato ? "#10b98150" : "var(--border2)"),
+                                color: clickato ? "#10b981" : "var(--muted)",
+                              }}>
+                                {clickato ? "\u2713" : ""}
+                              </span>
+                              {l.label}
+                            </span>
+                            <span style={{ color: "var(--muted)", fontSize: 14 }}>{"\u2197"}</span>
+                          </a>
+                        );
+                      })}
                     </div>
                   )}
 
                   {f.sottocartelle && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {f.sottocartelle.map((sc, idx) => {
-                        const subKey = f.n + "-" + idx;
-                        const subOpen = !!openSub[subKey];
+                        const subOpen = !!openSub[f.n + "-" + idx];
+                        const scSbloccata = subSbloccata(f.n, idx);
+                        const scCompletata = idx < (subStep[f.n] || 0);
+                        const scTuttiClickati = subTuttiClickati(f.n, idx, sc.links);
+                        const isUltima = idx === f.sottocartelle.length - 1;
+
                         return (
-                          <div key={subKey} style={{
+                          <div key={f.n + "-" + idx} style={{
                             background: "var(--bg3)",
                             border: "1px solid var(--border2)",
                             borderRadius: 10, overflow: "hidden",
+                            opacity: scSbloccata ? 1 : 0.55, transition: "opacity .2s",
                           }}>
-                            <button onClick={() => toggleSub(f.n, idx)}
-                              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 14px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
-                              <span style={{ fontWeight: 700, fontSize: 13, color: "var(--text)" }}>{sc.titolo}</span>
-                              <span style={{ color: "var(--muted)", fontSize: 14, transform: subOpen ? "rotate(90deg)" : "none", transition: "transform .2s" }}>{"\u203a"}</span>
+                            <button onClick={() => toggleSub(f.n, idx)} disabled={!scSbloccata}
+                              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: "none", border: "none", cursor: scSbloccata ? "pointer" : "not-allowed", textAlign: "left", fontFamily: "inherit" }}>
+                              <span style={{
+                                width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                fontSize: 10, fontWeight: 800,
+                                background: scCompletata ? "#10b98120" : "var(--bg2)",
+                                border: "1px solid " + (scCompletata ? "#10b98140" : "var(--border2)"),
+                                color: scCompletata ? "#10b981" : "var(--muted)",
+                              }}>
+                                {scCompletata ? "\u2713" : idx + 1}
+                              </span>
+                              <span style={{ flex: 1, fontWeight: 700, fontSize: 13, color: scSbloccata ? "var(--text)" : "var(--border2)" }}>
+                                {sc.titolo}
+                                {!scSbloccata && <span style={{ display: "block", fontSize: 10.5, color: "var(--border2)", fontWeight: 500, marginTop: 1 }}>Completa la sottocartella precedente per sbloccare</span>}
+                              </span>
+                              {scSbloccata && (
+                                <span style={{ color: "var(--muted)", fontSize: 14, transform: subOpen ? "rotate(90deg)" : "none", transition: "transform .2s" }}>{"\u203a"}</span>
+                              )}
                             </button>
-                            {subOpen && (
-                              <div style={{ padding: "0 14px 12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-                                {sc.links.map((l, i) => (
-                                  <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
-                                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: "var(--bg2)", border: "1px solid var(--border2)", borderRadius: 10, color: "var(--a2)", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
-                                    {l.label}
-                                    <span style={{ color: "var(--muted)", fontSize: 14 }}>{"\u2197"}</span>
-                                  </a>
-                                ))}
+                            {subOpen && scSbloccata && (
+                              <div style={{ padding: "0 14px 12px 14px" }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: isUltima ? 0 : 8 }}>
+                                  {sc.links.map((l, li) => {
+                                    const clickato = !!subLinkClickati[f.n + "-" + idx + "-" + li];
+                                    return (
+                                      <a key={li} href={l.url} target="_blank" rel="noopener noreferrer"
+                                        onClick={() => segnaSubLinkClickato(f.n, idx, li)}
+                                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: "var(--bg2)", border: "1px solid var(--border2)", borderRadius: 10, color: "var(--a2)", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
+                                        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                          <span style={{
+                                            width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
+                                            display: "flex", alignItems: "center", justifyContent: "center",
+                                            fontSize: 10, fontWeight: 800,
+                                            background: clickato ? "#10b98130" : "var(--bg3)",
+                                            border: "1px solid " + (clickato ? "#10b98150" : "var(--border2)"),
+                                            color: clickato ? "#10b981" : "var(--muted)",
+                                          }}>
+                                            {clickato ? "\u2713" : ""}
+                                          </span>
+                                          {l.label}
+                                        </span>
+                                        <span style={{ color: "var(--muted)", fontSize: 14 }}>{"\u2197"}</span>
+                                      </a>
+                                    );
+                                  })}
+                                </div>
+
+                                {!isUltima && !scCompletata && (
+                                  <div style={{ marginTop: 6 }}>
+                                    {!scTuttiClickati && (
+                                      <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 8 }}>
+                                        Apri tutti i link ({sc.links.filter((_, li) => subLinkClickati[f.n + "-" + idx + "-" + li]).length}/{sc.links.length}) per sbloccare la prossima
+                                      </div>
+                                    )}
+                                    <button onClick={() => scTuttiClickati && completaSub(f.n, idx, f.sottocartelle.length)} disabled={!scTuttiClickati}
+                                      style={{
+                                        padding: "8px 16px",
+                                        background: scTuttiClickati ? "linear-gradient(135deg,var(--a1),var(--a2))" : "var(--bg2)",
+                                        color: scTuttiClickati ? "#fff" : "var(--border2)",
+                                        border: "1px solid " + (scTuttiClickati ? "transparent" : "var(--border2)"),
+                                        borderRadius: 10, cursor: scTuttiClickati ? "pointer" : "not-allowed",
+                                        fontWeight: 800, fontSize: 12.5,
+                                      }}>
+                                      Fatto, sblocca la prossima
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -331,10 +453,24 @@ function OnboardingAlt({ auth, onUpdateProfile }) {
                   )}
 
                   {f.n === 1 && !completata && (
-                    <button onClick={completaStart}
-                      style={{ padding: "9px 18px", background: "linear-gradient(135deg,var(--a1),var(--a2))", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 800, fontSize: 13 }}>
-                      Fatto, sblocca il resto
-                    </button>
+                    <div style={{ marginTop: 6 }}>
+                      {!tuttiClickatiFase1 && (
+                        <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 8 }}>
+                          Apri tutti i link ({linksFase1.filter((_, i) => linkClickati[i]).length}/{linksFase1.length}) per sbloccare il resto
+                        </div>
+                      )}
+                      <button onClick={completaStart} disabled={!tuttiClickatiFase1}
+                        style={{
+                          padding: "9px 18px",
+                          background: tuttiClickatiFase1 ? "linear-gradient(135deg,var(--a1),var(--a2))" : "var(--bg3)",
+                          color: tuttiClickatiFase1 ? "#fff" : "var(--border2)",
+                          border: "1px solid " + (tuttiClickatiFase1 ? "transparent" : "var(--border2)"),
+                          borderRadius: 10, cursor: tuttiClickatiFase1 ? "pointer" : "not-allowed",
+                          fontWeight: 800, fontSize: 13,
+                        }}>
+                        Fatto, sblocca il resto
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
