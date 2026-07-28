@@ -35,6 +35,8 @@ const FASI_ONBOARDING = [
     links: [
       { label: "WES Stocks Base", url: "https://wowpowers.com/it/path/f373ccd8-44de-4c8e-bccc-c8cf094d45ae" },
       { label: "WES Stocks Intermedio", url: "https://wowpowers.com/it/catalog/paths/a9779909-3dbe-4880-ac2d-75b9f4c42068" },
+      { label: "Fascicolo THE M.A.P (da scaricare e stampare)", url: "https://drive.google.com/file/d/1QwcBaFJHPjPC01OrH4XDckqIEamdAq0x/view?usp=sharing" },
+      { label: "THE M.A.P percorso", url: "https://themap.click/map" },
     ],
   },
   {
@@ -227,13 +229,29 @@ function OnboardingClassico({ auth, onUpdateProfile, previewMode }) {
   const [openId, setOpenId] = useState(step <= FASI_ONBOARDING.length ? step : null);
   const tuttoCompletato = step > FASI_ONBOARDING.length;
 
+  // Traccia quali link sono stati aperti, per fase (keyed by "faseN-linkIndex").
+  // Solo state locale, non persistito - si azzera al reload, stesso pattern
+  // già usato nell'onboarding alternativo.
+  const [linkClickati, setLinkClickati] = useState({});
+
+  function segnaLinkClickato(n, i) {
+    setLinkClickati(prev => ({ ...prev, [n + "-" + i]: true }));
+  }
+
+  function tuttiClickati(f) {
+    if (previewMode) return true;
+    if (f.links.length === 0) return true;
+    return f.links.every((_, i) => linkClickati[f.n + "-" + i]);
+  }
+
   function toggleFase(n) {
     if (n > step) return; // bloccata, nessun effetto
     setOpenId(prev => prev === n ? null : n);
   }
 
-  function completaFase(n) {
-    const next = n + 1;
+  function completaFase(f) {
+    if (!tuttiClickati(f)) return; // sicurezza extra, il bottone e' comunque disabilitato
+    const next = f.n + 1;
     onUpdateProfile({ onboarding_step: next });
     setOpenId(next <= FASI_ONBOARDING.length ? next : null);
   }
@@ -250,6 +268,7 @@ function OnboardingClassico({ auth, onUpdateProfile, previewMode }) {
           const sbloccata = f.n <= step;
           const completata = f.n < step;
           const isOpen = openId === f.n;
+          const faseTuttiClickati = tuttiClickati(f);
 
           return (
             <div key={f.n} style={{
@@ -284,21 +303,51 @@ function OnboardingClassico({ auth, onUpdateProfile, previewMode }) {
                   {f.links.length === 0 ? (
                     <div style={{ fontSize: 12, color: "var(--border2)", padding: "6px 0 14px" }}>Contenuti in arrivo.</div>
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-                      {f.links.map(l => (
-                        <a key={l.url} href={l.url} target="_blank" rel="noopener noreferrer"
-                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: "var(--bg3)", border: "1px solid var(--border2)", borderRadius: 10, color: "var(--a2)", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
-                          {l.label}
-                          <span style={{ color: "var(--muted)", fontSize: 14 }}>{"\u2197"}</span>
-                        </a>
-                      ))}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
+                      {f.links.map((l, i) => {
+                        const clickato = previewMode || !!linkClickati[f.n + "-" + i];
+                        return (
+                          <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
+                            onClick={() => segnaLinkClickato(f.n, i)}
+                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: "var(--bg3)", border: "1px solid var(--border2)", borderRadius: 10, color: "var(--a2)", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{
+                                width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                fontSize: 10, fontWeight: 800,
+                                background: clickato ? "#10b98130" : "var(--bg2)",
+                                border: "1px solid " + (clickato ? "#10b98150" : "var(--border2)"),
+                                color: clickato ? "#10b981" : "var(--muted)",
+                              }}>
+                                {clickato ? "\u2713" : ""}
+                              </span>
+                              {l.label}
+                            </span>
+                            <span style={{ color: "var(--muted)", fontSize: 14 }}>{"\u2197"}</span>
+                          </a>
+                        );
+                      })}
                     </div>
                   )}
                   {!completata && (
-                    <button onClick={() => completaFase(f.n)}
-                      style={{ padding: "9px 18px", background: "linear-gradient(135deg,var(--a1),var(--a2))", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 800, fontSize: 13 }}>
-                      {f.n < FASI_ONBOARDING.length ? "Fatto, sblocca la fase successiva" : "Completa onboarding"}
-                    </button>
+                    <div style={{ marginTop: 6 }}>
+                      {!faseTuttiClickati && (
+                        <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 8 }}>
+                          Apri tutti i link ({f.links.filter((_, i) => linkClickati[f.n + "-" + i]).length}/{f.links.length}) per sbloccare
+                        </div>
+                      )}
+                      <button onClick={() => completaFase(f)} disabled={!faseTuttiClickati}
+                        style={{
+                          padding: "9px 18px",
+                          background: faseTuttiClickati ? "linear-gradient(135deg,var(--a1),var(--a2))" : "var(--bg3)",
+                          color: faseTuttiClickati ? "#fff" : "var(--border2)",
+                          border: "1px solid " + (faseTuttiClickati ? "transparent" : "var(--border2)"),
+                          borderRadius: 10, cursor: faseTuttiClickati ? "pointer" : "not-allowed",
+                          fontWeight: 800, fontSize: 13,
+                        }}>
+                        {f.n < FASI_ONBOARDING.length ? "Fatto, sblocca la fase successiva" : "Completa onboarding"}
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
