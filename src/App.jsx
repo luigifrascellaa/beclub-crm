@@ -722,11 +722,7 @@ export default function App() {
         const dp = await sbGetDownlineProspects(auth.token, uids);
         setDlProspects((dp||[]).map(r=>({...toApp(r), _userId:r.user_id})));
       }
-    }).catch(e => {
-      // DEBUG TEMPORANEO: prima era .catch(()=>{}) - qualsiasi errore qui spariva nel nulla.
-      console.error("[DEBUG downline/allProfiles fetch error]", e);
-      showToast("DEBUG - errore caricamento team: " + e.message, "#ef4444");
-    });
+    }).catch(()=>{});
   },[auth]);
 
   useEffect(()=>{
