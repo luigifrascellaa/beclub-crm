@@ -169,10 +169,17 @@ const FASI_ONBOARDING_ALT = [
 export function ClienteView({ auth, onUpdateProfile, allProfiles, positions }) {
   // Determina se l'utente ricade nella squadra sinistra di Dimitri, risalendo l'intera
   // catena positioned_under (spillover incluso), non solo il collegamento diretto.
+  // Calcolato SEMPRE (anche per Dimitri stesso, dove non viene usato) per rispettare
+  // le regole degli hook: mai un return prima di un useMemo/useState.
   const squadraDimitri = useMemo(() => {
     if (!auth?.userId) return null;
     return getSquadraRelativeTo(DIMITRI_ID, auth.userId, allProfiles || [], positions || [], {});
   }, [auth?.userId, allProfiles, positions]);
+
+  // Dimitri vede entrambi i percorsi, già sbloccati, con un selettore - vedi sotto.
+  if (auth?.userId === DIMITRI_ID) {
+    return <OnboardingDimitriPreview auth={auth} onUpdateProfile={onUpdateProfile} />;
+  }
 
   const usaOnboardingClassico = squadraDimitri === "sinistra";
 
@@ -181,8 +188,42 @@ export function ClienteView({ auth, onUpdateProfile, allProfiles, positions }) {
     : <OnboardingAlt auth={auth} onUpdateProfile={onUpdateProfile} />;
 }
 
-function OnboardingClassico({ auth, onUpdateProfile }) {
-  const step = auth?.profile?.onboarding_step || 1;
+// Solo per l'account di Dimitri: mostra entrambi i percorsi, già completamente sbloccati
+// e in sola visualizzazione. previewMode=true in entrambi i componenti sotto fa sì che
+// non venga MAI chiamato onUpdateProfile - quindi profiles.onboarding_step di Dimitri
+// non viene mai letto né scritto da questa vista, zero rischio di incrociarsi con l'altro
+// percorso o con qualsiasi altro account.
+function OnboardingDimitriPreview({ auth, onUpdateProfile }) {
+  const [tab, setTab] = useState(1);
+
+  return (
+    <div>
+      <div style={{ padding: "2rem 2.2rem 0", maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ display: "inline-flex", gap: 4, background: "var(--bg3)", borderRadius: 9, padding: 3, border: "1px solid var(--border)" }}>
+          {[{ id: 1, label: "Onboarding 1" }, { id: 2, label: "Onboarding 2" }].map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              style={{
+                padding: "7px 16px", borderRadius: 7, border: "none", cursor: "pointer",
+                fontSize: 11, fontWeight: 800, fontFamily: "inherit", transition: "all .2s",
+                background: tab === t.id ? "var(--bg4)" : "transparent",
+                color: tab === t.id ? "var(--a2)" : "var(--muted)",
+                boxShadow: tab === t.id ? "inset 0 0 0 1px var(--sidebar-border)" : "none",
+              }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 1
+        ? <OnboardingClassico auth={auth} onUpdateProfile={onUpdateProfile} previewMode />
+        : <OnboardingAlt auth={auth} onUpdateProfile={onUpdateProfile} previewMode />}
+    </div>
+  );
+}
+
+function OnboardingClassico({ auth, onUpdateProfile, previewMode }) {
+  const step = previewMode ? (FASI_ONBOARDING.length + 1) : (auth?.profile?.onboarding_step || 1);
   const [openId, setOpenId] = useState(step <= FASI_ONBOARDING.length ? step : null);
   const tuttoCompletato = step > FASI_ONBOARDING.length;
 
@@ -269,7 +310,7 @@ function OnboardingClassico({ auth, onUpdateProfile }) {
   );
 }
 
-function OnboardingAlt({ auth, onUpdateProfile }) {
+function OnboardingAlt({ auth, onUpdateProfile, previewMode }) {
   // onboarding_step qui ha solo 2 stati significativi: 1 = solo "ON BOARDING START"
   // sbloccato, 2 = tutto sbloccato (INTRODUZIONE NETWORK + PERCORSO TRADING). Stesso
   // campo DB usato da OnboardingClassico, senza conflitto perche' ogni utente vede
@@ -281,14 +322,17 @@ function OnboardingAlt({ auth, onUpdateProfile }) {
   // reload/logout. Se in futuro serve che sopravviva tra sessioni, va aggiunta una
   // colonna jsonb tipo profiles.onboarding_progress - non l'ho fatto qui per non
   // introdurre un cambio di schema non richiesto.
+  //
+  // previewMode (solo per Dimitri): bypassa tutti i controlli di sblocco/click,
+  // mostra tutto gia' completato, e non chiama mai onUpdateProfile.
   const step = auth?.profile?.onboarding_step || 1;
-  const sbloccatoTutto = step >= 2;
+  const sbloccatoTutto = previewMode || step >= 2;
   const [openId, setOpenId] = useState(sbloccatoTutto ? null : 1);
 
   // Click sui link di "ON BOARDING START" (keyed by indice link)
   const [linkClickati, setLinkClickati] = useState({});
   const linksFase1 = FASI_ONBOARDING_ALT[0].links;
-  const tuttiClickatiFase1 = linksFase1.every((_, i) => linkClickati[i]);
+  const tuttiClickatiFase1 = previewMode || linksFase1.every((_, i) => linkClickati[i]);
 
   // Per INTRODUZIONE NETWORK e PERCORSO TRADING (f.n con sottocartelle):
   // - subStep[n] = indice della sottocartella piu' avanzata sbloccata (0-based, default 0)
@@ -315,6 +359,7 @@ function OnboardingAlt({ auth, onUpdateProfile }) {
   }
 
   function subSbloccata(n, idx) {
+    if (previewMode) return true;
     return idx <= (subStep[n] || 0);
   }
 
@@ -329,6 +374,7 @@ function OnboardingAlt({ auth, onUpdateProfile }) {
   }
 
   function subTuttiClickati(n, idx, links) {
+    if (previewMode) return true;
     return links.every((_, li) => subLinkClickati[n + "-" + idx + "-" + li]);
   }
 
@@ -349,9 +395,9 @@ function OnboardingAlt({ auth, onUpdateProfile }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {FASI_ONBOARDING_ALT.map(f => {
           const sbloccata = f.n === 1 || sbloccatoTutto;
-          const completata = f.n === 1
+          const completata = previewMode ? true : (f.n === 1
             ? sbloccatoTutto
-            : (f.sottocartelle ? (subStep[f.n] || 0) >= f.sottocartelle.length - 1 : false);
+            : (f.sottocartelle ? (subStep[f.n] || 0) >= f.sottocartelle.length - 1 : false));
           const isOpen = openId === f.n;
 
           return (
@@ -387,7 +433,7 @@ function OnboardingAlt({ auth, onUpdateProfile }) {
                   {f.links && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
                       {f.links.map((l, i) => {
-                        const clickato = !!linkClickati[i];
+                        const clickato = previewMode || !!linkClickati[i];
                         return (
                           <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
                             onClick={() => segnaLinkClickato(i)}
@@ -417,7 +463,7 @@ function OnboardingAlt({ auth, onUpdateProfile }) {
                       {f.sottocartelle.map((sc, idx) => {
                         const subOpen = !!openSub[f.n + "-" + idx];
                         const scSbloccata = subSbloccata(f.n, idx);
-                        const scCompletata = idx < (subStep[f.n] || 0);
+                        const scCompletata = previewMode || idx < (subStep[f.n] || 0);
                         const scTuttiClickati = subTuttiClickati(f.n, idx, sc.links);
                         const isUltima = idx === f.sottocartelle.length - 1;
 
@@ -452,7 +498,7 @@ function OnboardingAlt({ auth, onUpdateProfile }) {
                               <div style={{ padding: "0 14px 12px 14px" }}>
                                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: isUltima ? 0 : 8 }}>
                                   {sc.links.map((l, li) => {
-                                    const clickato = !!subLinkClickati[f.n + "-" + idx + "-" + li];
+                                    const clickato = previewMode || !!subLinkClickati[f.n + "-" + idx + "-" + li];
                                     return (
                                       <a key={li} href={l.url} target="_blank" rel="noopener noreferrer"
                                         onClick={() => segnaSubLinkClickato(f.n, idx, li)}
@@ -476,7 +522,7 @@ function OnboardingAlt({ auth, onUpdateProfile }) {
                                   })}
                                 </div>
 
-                                {!isUltima && !scCompletata && (
+                                {!isUltima && !scCompletata && !previewMode && (
                                   <div style={{ marginTop: 6 }}>
                                     {!scTuttiClickati && (
                                       <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 8 }}>
