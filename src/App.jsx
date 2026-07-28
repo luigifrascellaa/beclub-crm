@@ -1218,7 +1218,7 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
       </div>
 
       <div style={{display:"flex",background:"var(--bg3)",borderRadius:9,padding:3,marginBottom:20,border:"1px solid var(--border)"}}>
-        {[{id:"marketer",label:"Marketer"},{id:"cliente",label:"Cliente"}].map(m=>{
+        {[{id:"marketer",label:"Marketer"},{id:"cliente",label:"Onboarding"}].map(m=>{
           const locked = m.id==="marketer" && !marketerAllowed;
           return (
             <button key={m.id} onClick={()=>{ if (locked) { showToast && showToast("In attesa di sblocco dal tuo leader","#f59e0b"); return; } setAppMode(m.id); }}
