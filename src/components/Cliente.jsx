@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 
 // ID dell'account Dimitri (permesso leader in Team.jsx, stesso ID usato qui come radice
 // per decidere chi e' nella sua squadra sinistra). NON e' lo stesso ID di LUDOVICO_ID
@@ -167,6 +167,9 @@ const FASI_ONBOARDING_ALT = [
 ];
 
 export function ClienteView({ auth, onUpdateProfile, allProfiles, positions }) {
+  const renderCount = useRef(0);
+  renderCount.current += 1;
+
   // Determina se l'utente ricade nella squadra sinistra di Dimitri, risalendo l'intera
   // catena positioned_under (spillover incluso), non solo il collegamento diretto.
   const squadraDimitri = useMemo(() => {
@@ -176,21 +179,17 @@ export function ClienteView({ auth, onUpdateProfile, allProfiles, positions }) {
 
   const usaOnboardingClassico = squadraDimitri === "sinistra";
 
-  // DEBUG TEMPORANEO - da rimuovere una volta risolto il problema di classificazione.
-  // Apri la Console del browser (Cmd+Opt+I su Brave/Chrome) e cerca la riga "[DEBUG onboarding]".
-  useEffect(() => {
-    const me = (allProfiles || []).find(p => p.id === auth?.userId);
-    console.log("[DEBUG onboarding]", {
-      userId: auth?.userId,
-      squadraDimitri,
-      mePositionedUnder: me?.positioned_under || null,
-      meUplineId: me?.upline_id || null,
-      dimitriPresenteInAllProfiles: !!(allProfiles || []).find(p => p.id === DIMITRI_ID),
-      allProfilesCount: (allProfiles || []).length,
-      positionsCount: (positions || []).length,
-      teamPositionsConUplineDimitri: (positions || []).filter(p => p.upline_id === DIMITRI_ID),
-    });
-  }, [auth?.userId, squadraDimitri, allProfiles, positions]);
+  // DEBUG TEMPORANEO - stampa ad OGNI singolo render (non solo quando useEffect rileva
+  // un cambio nelle dipendenze), per capire se allProfiles/positions arrivano MAI
+  // aggiornati a questo componente dopo il caricamento iniziale.
+  console.log("[DEBUG onboarding RENDER #" + renderCount.current + "]", {
+    userId: auth?.userId,
+    allProfilesLength: (allProfiles || []).length,
+    positionsLength: (positions || []).length,
+    squadraDimitri,
+    dimitriPresente: !!(allProfiles || []).find(p => p.id === DIMITRI_ID),
+    primiTreIdAllProfiles: (allProfiles || []).slice(0, 3).map(p => p.id),
+  });
 
   return usaOnboardingClassico
     ? <OnboardingClassico auth={auth} onUpdateProfile={onUpdateProfile} />
