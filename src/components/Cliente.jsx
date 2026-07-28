@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 // ID dell'account Dimitri (permesso leader in Team.jsx, stesso ID usato qui come radice
 // per decidere chi e' nella sua squadra sinistra). NON e' lo stesso ID di LUDOVICO_ID
@@ -175,6 +175,22 @@ export function ClienteView({ auth, onUpdateProfile, allProfiles, positions }) {
   }, [auth?.userId, allProfiles, positions]);
 
   const usaOnboardingClassico = squadraDimitri === "sinistra";
+
+  // DEBUG TEMPORANEO - da rimuovere una volta risolto il problema di classificazione.
+  // Apri la Console del browser (Cmd+Opt+I su Brave/Chrome) e cerca la riga "[DEBUG onboarding]".
+  useEffect(() => {
+    const me = (allProfiles || []).find(p => p.id === auth?.userId);
+    console.log("[DEBUG onboarding]", {
+      userId: auth?.userId,
+      squadraDimitri,
+      mePositionedUnder: me?.positioned_under || null,
+      meUplineId: me?.upline_id || null,
+      dimitriPresenteInAllProfiles: !!(allProfiles || []).find(p => p.id === DIMITRI_ID),
+      allProfilesCount: (allProfiles || []).length,
+      positionsCount: (positions || []).length,
+      teamPositionsConUplineDimitri: (positions || []).filter(p => p.upline_id === DIMITRI_ID),
+    });
+  }, [auth?.userId, squadraDimitri, allProfiles, positions]);
 
   return usaOnboardingClassico
     ? <OnboardingClassico auth={auth} onUpdateProfile={onUpdateProfile} />
