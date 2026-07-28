@@ -179,21 +179,29 @@ export function ClienteView({ auth, onUpdateProfile, allProfiles, positions }) {
 
   const usaOnboardingClassico = squadraDimitri === "sinistra";
 
-  // DEBUG TEMPORANEO - stampa ad OGNI singolo render (non solo quando useEffect rileva
-  // un cambio nelle dipendenze), per capire se allProfiles/positions arrivano MAI
-  // aggiornati a questo componente dopo il caricamento iniziale.
-  console.log("[DEBUG onboarding RENDER #" + renderCount.current + "]", {
-    userId: auth?.userId,
-    allProfilesLength: (allProfiles || []).length,
-    positionsLength: (positions || []).length,
-    squadraDimitri,
-    dimitriPresente: !!(allProfiles || []).find(p => p.id === DIMITRI_ID),
-    primiTreIdAllProfiles: (allProfiles || []).slice(0, 3).map(p => p.id),
-  });
+  return (
+    <>
+      {/* PANNELLO DEBUG TEMPORANEO - da rimuovere una volta risolto il problema.
+          Aggiornato automaticamente ad ogni render, nessun bisogno di aprire la console. */}
+      <div style={{
+        position: "fixed", bottom: 16, left: 300, zIndex: 2000,
+        background: "#000", color: "#0f0", fontFamily: "monospace", fontSize: 11,
+        padding: "10px 14px", borderRadius: 8, border: "1px solid #0f0",
+        maxWidth: 520, lineHeight: 1.6, opacity: 0.92,
+      }}>
+        <div>DEBUG onboarding — render #{renderCount.current}</div>
+        <div>userId: {auth?.userId || "—"}</div>
+        <div>allProfiles.length: {(allProfiles || []).length}</div>
+        <div>positions.length: {(positions || []).length}</div>
+        <div>squadraDimitri: {String(squadraDimitri)}</div>
+        <div>dimitriPresente: {String(!!(allProfiles || []).find(p => p.id === DIMITRI_ID))}</div>
+      </div>
 
-  return usaOnboardingClassico
-    ? <OnboardingClassico auth={auth} onUpdateProfile={onUpdateProfile} />
-    : <OnboardingAlt auth={auth} onUpdateProfile={onUpdateProfile} />;
+      {usaOnboardingClassico
+        ? <OnboardingClassico auth={auth} onUpdateProfile={onUpdateProfile} />
+        : <OnboardingAlt auth={auth} onUpdateProfile={onUpdateProfile} />}
+    </>
+  );
 }
 
 function OnboardingClassico({ auth, onUpdateProfile }) {
