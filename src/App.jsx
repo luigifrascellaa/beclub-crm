@@ -1142,7 +1142,7 @@ export default function App() {
 
       <main className="mc" style={{flex:1,overflowY:"auto",height:"100vh",paddingBottom:0}}>
         {(appMode==="cliente" || !(auth?.profile?.marketer_unlocked || auth?.profile?.is_leader)) ? (
-          <ClienteView auth={auth} onUpdateProfile={updateProfile} allProfiles={allProfiles} positions={positions} />
+          <ClienteView auth={auth} onUpdateProfile={updateProfile} />
         ) : (
           <>
             {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} />}
@@ -1218,7 +1218,7 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
       </div>
 
       <div style={{display:"flex",background:"var(--bg3)",borderRadius:9,padding:3,marginBottom:20,border:"1px solid var(--border)"}}>
-        {[{id:"marketer",label:"Marketer"},{id:"cliente",label:"Cliente"}].map(m=>{
+        {[{id:"marketer",label:"Marketer"},{id:"cliente",label:"Onboarding"}].map(m=>{
           const locked = m.id==="marketer" && !marketerAllowed;
           return (
             <button key={m.id} onClick={()=>{ if (locked) { showToast && showToast("In attesa di sblocco dal tuo leader","#f59e0b"); return; } setAppMode(m.id); }}
