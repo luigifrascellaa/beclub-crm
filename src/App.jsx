@@ -24,7 +24,7 @@ async function sbFetch(path, opts = {}) {
   const text = await res.text();
   if (!res.ok) {
     const e = text ? JSON.parse(text) : {};
-    const msg = e.message || res.statusText;
+    const msg = e.msg || e.error_description || e.message || e.error || res.statusText || "Errore sconosciuto";
     // Se il token è scaduto, forza logout
     if (msg.toLowerCase().includes("jwt expired") || msg.toLowerCase().includes("invalid jwt") || res.status === 401) {
       localStorage.removeItem("becrm_session");
@@ -311,6 +311,18 @@ function Av({ n, c, color, size=34 }) {
 }
 
 //  AUTH SCREEN 
+function traduciErroreAuth(msg) {
+  if (!msg) return "Errore sconosciuto";
+  const m = msg.toLowerCase();
+  if (m.includes("invalid login credentials")) return "Email o password non corretti.";
+  if (m.includes("email not confirmed")) return "Devi confermare la tua email prima di accedere — controlla la posta.";
+  if (m.includes("user already registered")) return "Esiste già un account con questa email.";
+  if (m.includes("too many requests") || m.includes("rate limit")) return "Troppi tentativi. Aspetta qualche minuto e riprova.";
+  if (m.includes("password") && m.includes("6 char")) return "La password deve avere almeno 6 caratteri.";
+  if (m.includes("failed to fetch") || m.includes("networkerror") || m.includes("load failed")) return "Problema di connessione — controlla la rete e riprova.";
+  return msg;
+}
+
 function AuthScreen({ onAuth }) {
   const [mode, setMode]     = useState("login");
   const [email, setEmail]   = useState("");
@@ -385,7 +397,7 @@ function AuthScreen({ onAuth }) {
     try {
       await sbResetPassword(email.trim());
       setMsg("Ti abbiamo inviato un'email con il link per reimpostare la password.");
-    } catch(e) { setErr(e.message||"Errore di connessione"); }
+    } catch(e) { setErr(traduciErroreAuth(e.message)); }
     setLoading(false);
   }
 
@@ -440,7 +452,15 @@ function AuthScreen({ onAuth }) {
           setMode("login");
         }
       } else {
-        const res = await sbSignIn(email, pass);
+        let res;
+        try {
+          res = await sbSignIn(email, pass);
+        } catch (firstErr) {
+          // Riprova una volta dopo una breve pausa: capita che il primo tentativo
+          // fallisca per un "risveglio a freddo" del database dopo un periodo di inattivita'
+          await new Promise(r => setTimeout(r, 1200));
+          res = await sbSignIn(email, pass);
+        }
         if (res && res.access_token) {
           const tok    = res.access_token;
           const userId = res.user.id;
@@ -456,7 +476,7 @@ function AuthScreen({ onAuth }) {
           setErr("Credenziali non valide");
         }
       }
-    } catch(e) { setErr(e.message||"Errore di connessione"); }
+    } catch(e) { setErr(traduciErroreAuth(e.message)); }
     setLoading(false);
   }
 
