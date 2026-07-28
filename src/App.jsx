@@ -338,6 +338,8 @@ function AuthScreen({ onAuth }) {
   const [hasPendingRef, setHasPendingRef] = useState(false);
   const [newPass, setNewPass]   = useState("");
   const [newPass2, setNewPass2] = useState("");
+  const [passConfirm, setPassConfirm] = useState("");
+  const [showPass, setShowPass] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -416,6 +418,7 @@ function AuthScreen({ onAuth }) {
   async function submit() {
     if (!email.trim() || !pass.trim()) { setErr("Compila email e password"); return; }
     if (mode === "signup" && (!nome.trim() || !cognome.trim())) { setErr("Compila nome e cognome"); return; }
+    if (mode === "signup" && pass !== passConfirm) { setErr("Le due password non coincidono"); return; }
     if (mode === "signup" && !hasPendingRef && !sponsorCode.trim()) { setErr("Inserisci il codice sponsor — non puoi registrarti senza."); return; }
     setLoading(true); setErr(""); setMsg("");
     try {
@@ -490,7 +493,7 @@ function AuthScreen({ onAuth }) {
         {(mode==="login"||mode==="signup") && (
           <div style={{display:"flex",background:"var(--bg3)",borderRadius:10,padding:4,marginBottom:24,border:"1px solid var(--border)"}}>
             {["login","signup"].map(m=>(
-              <button key={m} onClick={()=>{setMode(m);setErr("");setMsg("");}} className="tabbtn"
+              <button key={m} onClick={()=>{setMode(m);setErr("");setMsg("");setPassConfirm("");}} className="tabbtn"
                 style={{flex:1,background:mode===m?"var(--bg4)":"transparent",color:mode===m?"var(--a2)":"var(--muted)",boxShadow:mode===m?"inset 0 0 0 1px var(--sidebar-border)":"none"}}>
                 {m==="login"?"Accedi":"Registrati"}
               </button>
@@ -551,7 +554,29 @@ function AuthScreen({ onAuth }) {
           {(mode==="login"||mode==="signup") && (
             <div>
               <label style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"}}>Password</label>
-              <input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&submit()} />
+              <div style={{position:"relative"}}>
+                <input type={showPass?"text":"password"} value={pass} onChange={e=>setPass(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&submit()} style={{paddingRight:38}} />
+                <span onClick={()=>setShowPass(s=>!s)} title={showPass?"Nascondi password":"Mostra password"}
+                  style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",cursor:"pointer",fontSize:15,userSelect:"none",lineHeight:1}}>
+                  {showPass ? "🙈" : "👁️"}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {mode==="signup" && (
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"}}>Conferma Password</label>
+              <div style={{position:"relative"}}>
+                <input type={showPass?"text":"password"} value={passConfirm} onChange={e=>setPassConfirm(e.target.value)} placeholder="Ripeti la password" onKeyDown={e=>e.key==="Enter"&&submit()} style={{paddingRight:38}} />
+                <span onClick={()=>setShowPass(s=>!s)} title={showPass?"Nascondi password":"Mostra password"}
+                  style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",cursor:"pointer",fontSize:15,userSelect:"none",lineHeight:1}}>
+                  {showPass ? "🙈" : "👁️"}
+                </span>
+              </div>
+              {passConfirm && pass !== passConfirm && (
+                <div style={{fontSize:11,color:"#f87171",marginTop:5}}>Le password non coincidono</div>
+              )}
             </div>
           )}
 
@@ -605,7 +630,7 @@ function AuthScreen({ onAuth }) {
           <div style={{textAlign:"center",marginTop:16,fontSize:11,color:"var(--muted)",display:"flex",flexDirection:"column",gap:8}}>
             <div>
               Non hai un account?{" "}
-              <span onClick={()=>{setMode("signup");setErr("");setMsg("");}} style={{color:"var(--a2)",cursor:"pointer",fontWeight:700}}>Registrati</span>
+              <span onClick={()=>{setMode("signup");setErr("");setMsg("");setPassConfirm("");}} style={{color:"var(--a2)",cursor:"pointer",fontWeight:700}}>Registrati</span>
             </div>
             <div>
               <span onClick={()=>{setMode("reset");setErr("");setMsg("");}} style={{color:"var(--muted)",cursor:"pointer",textDecoration:"underline"}}>Hai dimenticato la password?</span>
