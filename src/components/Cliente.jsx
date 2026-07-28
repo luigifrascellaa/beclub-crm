@@ -112,6 +112,58 @@ const FASI_ONBOARDING_ALT = [
       },
     ],
   },
+  {
+    n: 4,
+    titolo: "PERCORSO PAC/AZIONI",
+    sottocartelle: [
+      {
+        titolo: "Fase 1",
+        links: [
+          { label: "WES Stocks Base", url: "https://wowpowers.com/it/path/f373ccd8-44de-4c8e-bccc-c8cf094d45ae" },
+          { label: "WES Stocks Intermedio", url: "https://wowpowers.com/it/catalog/paths/a9779909-3dbe-4880-ac2d-75b9f4c42068" },
+        ],
+      },
+      {
+        titolo: "Fase 2",
+        links: [
+          { label: "Live Enrico", url: "https://wowpowers.com/it/stream-player/enrico/livestream/66107c76-302e-4d66-8c6a-4ce778b994bf?reference=TOP_EDUCATORS" },
+          { label: "WES Stocks Avanzato", url: "https://wowpowers.com/it/path/73d9a573-2465-4e4a-bdd8-2607d5d08958" },
+        ],
+      },
+      {
+        titolo: "Fase 3",
+        links: [
+          { label: "Psicologia, basi e PAC - Click", url: "https://www.myclick.space/c/be-servizi-ita/sections/1099195/lessons/4189638" },
+        ],
+      },
+    ],
+  },
+  {
+    n: 5,
+    titolo: "PERCORSO SAGEMASTER/CRYPTO",
+    sottocartelle: [
+      {
+        titolo: "Fase 1",
+        links: [
+          { label: "Accedi a SAGEMASTER", url: "https://sfx.sagemaster.io/sign-in?next=%2F" },
+          { label: "WES Crypto Base", url: "https://wowpowers.com/it/path/6e4e6247-1130-4b51-93bb-798393719f39" },
+        ],
+      },
+      {
+        titolo: "Fase 2",
+        links: [
+          { label: "Call onboarding: AI tools, breve/medio e lungo termine", url: "https://www.myclick.space/c/be-servizi-ita/sections/1099195/lessons/4189640" },
+          { label: "Imposta la tua prima grid (step by step)", url: "https://drive.google.com/file/d/1Hlw_F1WBg1n2ZreTgETH-bd8LhV1FtSZ/view" },
+        ],
+      },
+      {
+        titolo: "Fase 3",
+        links: [
+          { label: "Live Pomarico (Domenica H20:00)", url: "https://wowpowers.com/it/stream-player/marco_p/livestream/1f5e6f30-5cd8-4522-98a5-e254fff735dd" },
+        ],
+      },
+    ],
+  },
 ];
 
 export function ClienteView({ auth, onUpdateProfile, allProfiles, positions }) {
