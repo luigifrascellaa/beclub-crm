@@ -354,8 +354,8 @@ export function MentoreChatWidget({ insights }) {
   }
 
   return (
-    <div style={{ position: "fixed", bottom: 22, right: 22, zIndex: 1500, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-      <div style={{
+    <div className="mentore-widget" style={{ position: "fixed", bottom: 22, right: 22, zIndex: 1500, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+      <div className="mentore-panel" style={{
         width: 340, maxHeight: 500, background: "var(--bg2)", border: "1px solid var(--border2)", borderRadius: 20,
         boxShadow: "0 18px 55px #000000b0", display: "flex", flexDirection: "column", overflow: "hidden",
         marginBottom: 14, transformOrigin: "bottom right",

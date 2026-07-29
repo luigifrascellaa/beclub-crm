@@ -285,9 +285,9 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.6) sepia(1) h
 .spinner{width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--a1);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
 @media(max-width:768px){
   body{overflow:auto}
-  aside.sb{display:none!important}
+  .app-root{height:100dvh!important}
   nav.mobnav{display:flex!important}
-  main.mc{height:calc(100vh - 60px)!important}
+  main.mc{height:calc(100dvh - 60px)!important;padding-bottom:84px!important}
   .kpi-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
   .page-wrap{padding:1rem!important}
   .tbl-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
@@ -297,8 +297,17 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.6) sepia(1) h
   .filt-row>*{min-width:calc(50% - 4px)!important;flex:1 1 calc(50% - 4px)!important}
   h1.ptitle{font-size:20px!important}
   .toast-pos{bottom:68px!important;right:12px!important;left:12px!important;text-align:center}
+  .mentore-widget{bottom:78px!important;right:14px!important}
+  .mentore-panel{width:calc(100vw - 28px)!important;max-width:340px!important}
+  .hamburger-btn{display:flex!important}
+  /* Sidebar diventa un drawer scorrevole invece di sparire del tutto */
+  aside.sb{position:fixed!important;top:0;left:0;height:100dvh!important;z-index:1800;transform:translateX(-100%);transition:transform .25s ease;box-shadow:0 0 40px #000000aa}
+  aside.sb.drawer-open{transform:translateX(0)!important}
+  .drawer-scrim{display:block!important}
 }
 nav.mobnav{display:none}
+.hamburger-btn{display:none}
+.drawer-scrim{display:none}
 `;
 
 
@@ -653,6 +662,7 @@ export default function App() {
   const [sidebarMode, setSidebarMode] = useState("tutti");
   const [appMode, setAppMode] = useState("marketer"); // "marketer" | "cliente"
   const [listaMode, setListaMode] = useState("personale");
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false); // solo mobile: sidebar come drawer scorrevole
 
   useEffect(()=>{
     const el=document.createElement("style");
@@ -1120,7 +1130,7 @@ export default function App() {
 
 
   return (
-    <div style={{display:"flex",flexDirection:"row",height:"100vh",width:"100vw",overflow:"hidden",background:"var(--bg)"}}>
+    <div className="app-root" style={{display:"flex",flexDirection:"row",height:"100vh",width:"100vw",overflow:"hidden",background:"var(--bg)"}}>
       {toast && <div className="toast-pos" style={{position:"fixed",bottom:24,right:24,zIndex:9999,background:toast.color,color:"#fff",padding:"12px 22px",borderRadius:12,fontWeight:700,fontSize:13,boxShadow:"0 8px 30px #00000060",animation:"fadeIn .25s ease"}}>{toast.msg}</div>}
       {saving && <div style={{position:"fixed",top:14,right:14,zIndex:9998,background:"var(--bg4)",border:"1px solid var(--border2)",borderRadius:9,padding:"7px 14px",fontSize:12,color:"var(--a2)",display:"flex",alignItems:"center",gap:7}}><span className="spinner" />Salvataggio...</div>}
 
@@ -1144,7 +1154,14 @@ export default function App() {
 
       <MentoreChatWidget insights={mentoreInsights} />
 
-      <Sidebar view={view} setView={setView} data={data} urgenti={urgenti} onAdd={openAdd} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downline.length} sidebarMode={sidebarMode} setSidebarMode={setSidebarMode} appMode={appMode} setAppMode={setAppMode} showToast={showToast} />
+      <button className="hamburger-btn" onClick={()=>setMobileDrawerOpen(true)} aria-label="Apri menu"
+        style={{position:"fixed",top:14,left:14,zIndex:900,width:38,height:38,borderRadius:10,background:"var(--bg2)",border:"1px solid var(--border)",color:"var(--text)",fontSize:16,cursor:"pointer",alignItems:"center",justifyContent:"center"}}>
+        &#9776;
+      </button>
+
+      <div className="drawer-scrim" onClick={()=>setMobileDrawerOpen(false)} style={{position:"fixed",inset:0,zIndex:1700,background:"#00000090",opacity:mobileDrawerOpen?1:0,pointerEvents:mobileDrawerOpen?"auto":"none",transition:"opacity .2s ease"}} />
+
+      <Sidebar view={view} setView={v=>{setView(v);setMobileDrawerOpen(false);}} data={data} urgenti={urgenti} onAdd={()=>{openAdd();setMobileDrawerOpen(false);}} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downline.length} sidebarMode={sidebarMode} setSidebarMode={setSidebarMode} appMode={appMode} setAppMode={m=>{setAppMode(m);setMobileDrawerOpen(false);}} showToast={showToast} drawerOpen={mobileDrawerOpen} onCloseDrawer={()=>setMobileDrawerOpen(false)} />
 
       <main className="mc" style={{flex:1,overflowY:"auto",height:"100vh",paddingBottom:0}}>
         {(appMode==="cliente" || !(auth?.profile?.marketer_unlocked || auth?.profile?.is_leader)) ? (
@@ -1206,7 +1223,7 @@ export default function App() {
 }
 
 //  SIDEBAR 
-function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout, downlineCount, sidebarMode, setSidebarMode, appMode, setAppMode, showToast }) {
+function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout, downlineCount, sidebarMode, setSidebarMode, appMode, setAppMode, showToast, drawerOpen, onCloseDrawer }) {
   const marketerAllowed = !!(auth?.profile?.marketer_unlocked || auth?.profile?.is_leader);
   const navs = [
     { id:"dash",    icon:"", label:"Dashboard" },
@@ -1218,9 +1235,13 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
     { id:"profilo", icon:"", label:"Profilo" },
   ];
   return (
-    <aside className="sb" style={{width:222,minWidth:222,background:"var(--bg2)",borderRight:"1px solid #11203a",padding:"1.5rem .9rem",display:"flex",flexDirection:"column",gap:4,height:"100vh",overflowY:"auto"}}>
-      <div style={{marginBottom:14,paddingLeft:4}}>
+    <aside className={"sb"+(drawerOpen?" drawer-open":"")} style={{width:222,minWidth:222,background:"var(--bg2)",borderRight:"1px solid #11203a",padding:"1.5rem .9rem",display:"flex",flexDirection:"column",gap:4,height:"100vh",overflowY:"auto"}}>
+      <div style={{marginBottom:14,paddingLeft:4,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{fontWeight:900,fontSize:15,color:"var(--text)",lineHeight:1.2}}>Kairos CRM</div>
+        <button className="hamburger-btn" onClick={onCloseDrawer} aria-label="Chiudi menu"
+          style={{width:26,height:26,borderRadius:7,background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--muted)",fontSize:13,cursor:"pointer",alignItems:"center",justifyContent:"center"}}>
+          &#10005;
+        </button>
       </div>
 
       <div style={{display:"flex",background:"var(--bg3)",borderRadius:9,padding:3,marginBottom:20,border:"1px solid var(--border)"}}>
