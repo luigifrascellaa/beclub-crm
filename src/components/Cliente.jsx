@@ -366,11 +366,9 @@ function OnboardingAlt({ auth, onUpdateProfile, previewMode }) {
   // sempre e solo uno dei due percorsi.
   //
   // Il progresso PIU' IN PROFONDITA' (quale sottocartella e' sbloccata dentro
-  // INTRODUZIONE NETWORK / PERCORSO TRADING, e quali link sono stati aperti) vive
-  // SOLO in questo state locale, non e' salvato su Supabase: si azzera al
-  // reload/logout. Se in futuro serve che sopravviva tra sessioni, va aggiunta una
-  // colonna jsonb tipo profiles.onboarding_progress - non l'ho fatto qui per non
-  // introdurre un cambio di schema non richiesto.
+  // INTRODUZIONE NETWORK / PERCORSO TRADING, e quali link sono stati aperti) e' salvato
+  // in profiles.onboarding_progress (jsonb), letto qui come valore iniziale dello state
+  // e riscritto (in silenzio, senza toast) ad ogni click - sopravvive a reload/logout.
   //
   // previewMode (solo per Dimitri): bypassa tutti i controlli di sblocco/click,
   // mostra tutto gia' completato, e non chiama mai onUpdateProfile.
@@ -378,18 +376,32 @@ function OnboardingAlt({ auth, onUpdateProfile, previewMode }) {
   const sbloccatoTutto = previewMode || step >= 2;
   const [openId, setOpenId] = useState(sbloccatoTutto ? null : 1);
 
+  const progressoSalvato = auth?.profile?.onboarding_progress || {};
+
   // Click sui link di "ON BOARDING START" (keyed by indice link)
-  const [linkClickati, setLinkClickati] = useState({});
+  const [linkClickati, setLinkClickati] = useState(progressoSalvato.linkClickati || {});
   const linksFase1 = FASI_ONBOARDING_ALT[0].links;
   const tuttiClickatiFase1 = previewMode || linksFase1.every((_, i) => linkClickati[i]);
 
   // Per INTRODUZIONE NETWORK e PERCORSO TRADING (f.n con sottocartelle):
   // - subStep[n] = indice della sottocartella piu' avanzata sbloccata (0-based, default 0)
-  // - openSub["n-idx"] = se quella sottocartella e' espansa
+  // - openSub["n-idx"] = se quella sottocartella e' espansa (solo UI, non persistito)
   // - subLinkClickati["n-idx-linkIdx"] = se quel link e' stato aperto
-  const [subStep, setSubStep] = useState({});
+  const [subStep, setSubStep] = useState(progressoSalvato.subStep || {});
   const [openSub, setOpenSub] = useState({});
-  const [subLinkClickati, setSubLinkClickati] = useState({});
+  const [subLinkClickati, setSubLinkClickati] = useState(progressoSalvato.subLinkClickati || {});
+
+  // Scrive il progresso su Supabase (silenzioso, nessun toast). Mai in previewMode.
+  function salvaProgresso(patch) {
+    if (previewMode) return;
+    onUpdateProfile({
+      onboarding_progress: {
+        linkClickati: patch.linkClickati || linkClickati,
+        subStep: patch.subStep || subStep,
+        subLinkClickati: patch.subLinkClickati || subLinkClickati,
+      },
+    }, true);
+  }
 
   function toggleFase(n) {
     const sbloccata = n === 1 || sbloccatoTutto;
@@ -398,7 +410,9 @@ function OnboardingAlt({ auth, onUpdateProfile, previewMode }) {
   }
 
   function segnaLinkClickato(i) {
-    setLinkClickati(prev => ({ ...prev, [i]: true }));
+    const next = { ...linkClickati, [i]: true };
+    setLinkClickati(next);
+    salvaProgresso({ linkClickati: next });
   }
 
   function completaStart() {
@@ -419,7 +433,9 @@ function OnboardingAlt({ auth, onUpdateProfile, previewMode }) {
   }
 
   function segnaSubLinkClickato(n, idx, li) {
-    setSubLinkClickati(prev => ({ ...prev, [n + "-" + idx + "-" + li]: true }));
+    const next = { ...subLinkClickati, [n + "-" + idx + "-" + li]: true };
+    setSubLinkClickati(next);
+    salvaProgresso({ subLinkClickati: next });
   }
 
   function subTuttiClickati(n, idx, links) {
@@ -428,7 +444,9 @@ function OnboardingAlt({ auth, onUpdateProfile, previewMode }) {
   }
 
   function completaSub(n, idx, totaleSottocartelle) {
-    setSubStep(prev => ({ ...prev, [n]: Math.max(prev[n] || 0, idx + 1) }));
+    const nextSubStep = { ...subStep, [n]: Math.max(subStep[n] || 0, idx + 1) };
+    setSubStep(nextSubStep);
+    salvaProgresso({ subStep: nextSubStep });
     if (idx + 1 < totaleSottocartelle) {
       setOpenSub(prev => ({ ...prev, [n + "-" + idx]: false, [n + "-" + (idx + 1)]: true }));
     }

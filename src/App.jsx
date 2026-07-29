@@ -943,7 +943,7 @@ export default function App() {
   }
 
 
-  async function updateProfile(fields) {
+  async function updateProfile(fields, silent) {
     try {
       await sbUpdateProfile(auth.token, auth.userId, fields);
       const newProfile = { ...auth.profile, ...fields };
@@ -953,7 +953,7 @@ export default function App() {
         if (saved) localStorage.setItem("becrm_session", JSON.stringify(updated));
         return updated;
       });
-      showToast("Profilo aggiornato ");
+      if (!silent) showToast("Profilo aggiornato ");
       // Se cambia positioned_under ricarica la downline
       if (fields.positioned_under !== undefined) {
         const allProfiles = await sbGetAllProfiles(auth.token);
