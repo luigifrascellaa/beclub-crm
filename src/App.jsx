@@ -1053,6 +1053,12 @@ export default function App() {
   const cdFU  = dashData.filter(p=>p.fase==="DA_RISENTIRE"||p.fase==="DA_RIFISSARE");
   const cdNI  = cd.filter(p=>p.fase==="NON_INT"||p.fase==="NON_PIACE");
   const cdConv= cd.length?Math.round(cdSub.length/cd.length*100):0;
+  // Forza di chiusura: su chi è DAVVERO arrivato a Closing (reachedEver copre anche chi
+  // è poi avanzato a Iscritto, non solo chi è fermo lì ora), quanti hanno chiuso.
+  // Diversa da cdConv: cdConv misura se il funnel intero rende, questa misura la sola
+  // abilità di chiusura, indipendente da quanti entrano a monte.
+  const cdChiusi = cd.filter(p=>reachedEver(p,"CLOSING"));
+  const cdForzaChiusura = cdChiusi.length?Math.round(cdSub.length/cdChiusi.length*100):0;
   const totSub  = dashData.filter(p=>p.fase==="SUB").length;
   const totConv = dashData.length?Math.round(totSub/dashData.length*100):0;
   const urgenti = data.filter(p=>(isOver(p.followUp)||isToday(p.followUp))&&p.fase!=="NON_INT"&&p.fase!=="NON_PIACE"&&p.fase!=="DA_RIFISSARE");
@@ -1145,7 +1151,7 @@ export default function App() {
           <ClienteView auth={auth} onUpdateProfile={updateProfile} allProfiles={allProfiles} positions={positions} />
         ) : (
           <>
-            {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} />}
+            {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} cdChiusi={cdChiusi} cdForzaChiusura={cdForzaChiusura} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} />}
             {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale")setFMembro("");}} hasTeam={dlProspects.length>0} />}
             {view==="stats"   && <Statistiche data={data} dlProspects={dlProspects} />}
             {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} onToggleMarketer={toggleMarketerUnlocked} />}
@@ -1343,12 +1349,13 @@ function CicloCountdown({ ciclo }) {
   );
 }
 
-function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, totSub, totConv, totAll, funnelCounts, funnelMax, urgenti, dashCiclo, setDashCiclo, onOpen, dashMode, setDashMode, hasTeam, ticketVenduti, mentoreInsights }) {
+function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, cdChiusi, cdForzaChiusura, totSub, totConv, totAll, funnelCounts, funnelMax, urgenti, dashCiclo, setDashCiclo, onOpen, dashMode, setDashMode, hasTeam, ticketVenduti, mentoreInsights }) {
   const cc = v => v>=20?"#10b981":v>=10?"var(--a2)":"#f59e0b";
   const bvCiclo = cdSub.reduce((acc,p)=>acc+bvOfPacchetto(p.pacchetto,p.bvCustom),0);
   const kpis = [
     {label:"In percorso",value:cdAct.length,icon:"",color:"var(--a1)",sub:cd.length+" totali nel ciclo",detail:"FUP1 → Closing"},
     {label:"Conv. ciclo",value:cdConv+"%",icon:"",color:cc(cdConv),sub:cdSub.length+" iscritti / "+cd.length,detail:cdConv>=20?"Ottimo ":cdConv>=10?"Nella media":"Da migliorare"},
+    {label:"Forza chiusura",value:cdForzaChiusura+"%",icon:"",color:cc(cdForzaChiusura),sub:cdSub.length+" iscritti / "+cdChiusi.length+" a Closing",detail:cdChiusi.length===0?"Nessuno a Closing":cdForzaChiusura>=50?"Ottimo ":cdForzaChiusura>=30?"Nella media":"Da migliorare"},
     {label:"Iscritti ciclo",value:cdSub.length,icon:"",color:"#10b981",sub:"su "+cd.length+" conosciuti",detail:"questo ciclo"},
     {label:"BV ciclo",value:bvCiclo,icon:"",color:"#f59e0b",sub:"da "+cdSub.length+" iscritti",detail:"Business Volume"},
     {label:"Ticket evento",value:ticketVenduti||0,icon:"",color:"#a855f7",sub:"tu + downline",detail:"Venduti"},
