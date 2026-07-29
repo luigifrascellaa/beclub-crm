@@ -284,10 +284,10 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.6) sepia(1) h
 .togbtn{width:34px;height:28px;border-radius:7px;border:none;cursor:pointer;font-size:13px;font-weight:900;font-family:'Poppins',sans-serif;transition:all .18s;display:flex;align-items:center;justify-content:center}
 .spinner{width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--a1);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
 @media(max-width:768px){
-  body{overflow:auto}
-  .app-root{height:100dvh!important}
+  body{overflow:auto;-webkit-overflow-scrolling:touch}
+  .app-root{height:auto!important;min-height:100dvh!important;overflow:visible!important}
   nav.mobnav{display:flex!important}
-  main.mc{height:calc(100dvh - 60px)!important;padding-bottom:84px!important}
+  main.mc{height:auto!important;overflow-y:visible!important;padding-bottom:84px!important;-webkit-overflow-scrolling:touch}
   .kpi-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
   .page-wrap{padding:1rem!important}
   .tbl-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
