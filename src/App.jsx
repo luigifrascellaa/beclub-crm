@@ -78,7 +78,7 @@ function toApp(r) {
     pacchetto:r.pacchetto||"", bvCustom:r.bv_custom||0,
     telefono:r.telefono||"", instagram:r.instagram||"",
     checklist:r.checklist||{kyc:false,pandadoc:false,click:false},
-    interesse:r.interesse||"",
+    interesse:r.interesse||"", dataNascita:r.data_nascita||"",
   };
 }
 function toDB(p, uid) {
@@ -89,7 +89,7 @@ function toDB(p, uid) {
     pacchetto:p.pacchetto||null, bv_custom:p.bvCustom||null,
     telefono:p.telefono||null, instagram:p.instagram||null,
     checklist:p.checklist||{kyc:false,pandadoc:false,click:false},
-    interesse:p.interesse||null,
+    interesse:p.interesse||null, data_nascita:p.dataNascita||null,
   };
 }
 
@@ -227,6 +227,16 @@ const today = () => new Date().toISOString().split("T")[0];
 const isOver  = d => d && d < today();
 const isToday = d => d === today();
 const fmt = d => d ? new Date(d+"T12:00:00").toLocaleDateString("it-IT") : "\u2014";
+function eta(dataNascita) {
+  if (!dataNascita) return null;
+  const nascita = new Date(dataNascita+"T12:00:00");
+  const oggi = new Date();
+  let anni = oggi.getFullYear() - nascita.getFullYear();
+  const meseNonAncoraArrivato = oggi.getMonth() < nascita.getMonth();
+  const stessoMeseGiornoPrima = oggi.getMonth() === nascita.getMonth() && oggi.getDate() < nascita.getDate();
+  if (meseNonAncoraArrivato || stessoMeseGiornoPrima) anni--;
+  return anni;
+}
 
 function teamStats(prospects) {
   const total = prospects.length;
@@ -284,10 +294,10 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.6) sepia(1) h
 .togbtn{width:34px;height:28px;border-radius:7px;border:none;cursor:pointer;font-size:13px;font-weight:900;font-family:'Poppins',sans-serif;transition:all .18s;display:flex;align-items:center;justify-content:center}
 .spinner{width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--a1);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
 @media(max-width:768px){
-  body{overflow:auto;-webkit-overflow-scrolling:touch}
-  .app-root{height:auto!important;min-height:100dvh!important;overflow:visible!important}
+  body{overflow:auto}
+  .app-root{height:100dvh!important}
   nav.mobnav{display:flex!important}
-  main.mc{height:auto!important;overflow-y:visible!important;padding-bottom:84px!important;-webkit-overflow-scrolling:touch}
+  main.mc{height:calc(100dvh - 60px)!important;padding-bottom:84px!important}
   .kpi-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
   .page-wrap{padding:1rem!important}
   .tbl-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
@@ -1817,6 +1827,11 @@ function FormModal({ form, setForm, onSave, onClose, onDelete, isEdit, auth, dow
         <div style={{gridColumn:"1/-1"}}><label style={lbl}>Citta</label><input value={form.citta||""} onChange={e=>set("citta",e.target.value)} placeholder="es. Milano" /></div>
         <div><label style={lbl}>Telefono</label><input value={form.telefono||""} onChange={e=>set("telefono",e.target.value)} placeholder="+39 333 000 0000" /></div>
         <div><label style={lbl}>Instagram</label><input value={form.instagram||""} onChange={e=>set("instagram",e.target.value)} placeholder="@username" /></div>
+        <div>
+          <label style={lbl}>Data di nascita</label>
+          <input type="date" value={form.dataNascita||""} onChange={e=>set("dataNascita",e.target.value)} />
+          {form.dataNascita && <div style={{marginTop:5,fontSize:11,color:"var(--a2)",fontWeight:700}}>{eta(form.dataNascita)} anni</div>}
+        </div>
         <div><label style={lbl}>Fonte</label><select value={form.fonte||"Instagram"} onChange={e=>set("fonte",e.target.value)}>{FONTI.map(f=><option key={f} value={f}>{FONTE_ICO[f]} {f}</option>)}</select></div>
         <div><label style={lbl}>Fase</label><select value={form.fase||"INVITO"} onChange={e=>set("fase",e.target.value)}><optgroup label="Funnel">{FASI_FUNNEL.map(f=><option key={f} value={f}>{FASE_LABEL[f]}</option>)}</optgroup><optgroup label="Speciali">{FASI_SPECIALI.map(f=><option key={f} value={f}>{FASE_LABEL[f]}</option>)}</optgroup></select></div>
         <div style={{gridColumn:"1/-1"}}><label style={lbl}>Data conoscenza</label><input type="date" value={form.conosciutoAt||today()} onChange={e=>set("conosciutoAt",e.target.value)} /></div>
@@ -2023,7 +2038,7 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, o
             </div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:9}}>
-            {[{l:"Fase ora",v:FASE_LABEL[p.fase],color:clr},{l:"Ciclo conoscenza",v:ciclo?"Ciclo "+ciclo:"\u2014",color:ciclo===CICLO_CORRENTE?"var(--a1)":undefined},{l:"Conosciuto il",v:fmt(p.conosciutoAt)},{l:"Follow-up",v:p.followUp?(od?"Scaduto \u00b7 ":dt?"Oggi \u00b7 ":"")+fmt(p.followUp):"Non impostato",color:od?"#f87171":dt?"#fbbf24":undefined}].map(({l,v,color:col})=>(<div key={l} style={box}><div style={lbl}>{l}</div><div style={{color:col||"var(--text)",fontWeight:700,fontSize:13}}>{v}</div></div>))}
+            {[{l:"Fase ora",v:FASE_LABEL[p.fase],color:clr},{l:"Ciclo conoscenza",v:ciclo?"Ciclo "+ciclo:"\u2014",color:ciclo===CICLO_CORRENTE?"var(--a1)":undefined},{l:"Conosciuto il",v:fmt(p.conosciutoAt)},{l:"Follow-up",v:p.followUp?(od?"Scaduto \u00b7 ":dt?"Oggi \u00b7 ":"")+fmt(p.followUp):"Non impostato",color:od?"#f87171":dt?"#fbbf24":undefined},...(p.dataNascita?[{l:"Età",v:eta(p.dataNascita)+" anni"}]:[])].map(({l,v,color:col})=>(<div key={l} style={box}><div style={lbl}>{l}</div><div style={{color:col||"var(--text)",fontWeight:700,fontSize:13}}>{v}</div></div>))}
             {p.telefono&&(
               <div style={box}>
                 <div style={lbl}> Telefono</div>
