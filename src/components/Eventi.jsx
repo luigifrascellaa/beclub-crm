@@ -69,7 +69,7 @@ function PersonaCard({ p, ownerName, showOwner, onClick, onMarkSold }) {
 }
 
 // ===== modale aggiungi/modifica persona =====
-function PersonaModal({ persona, defaultStato, onSave, onClose, onDelete }) {
+function PersonaModal({ persona, defaultStato, onSave, onClose, onDelete, auth, downline }) {
   const [form, setForm] = useState(persona || { nome: "", cognome: "", telefono: "", instagram: "", citta: "", note: "", stato: defaultStato || "in_ballo", categoria: "team" });
   const lbl = { fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: .8, marginBottom: 5, display: "block" };
 
@@ -79,6 +79,16 @@ function PersonaModal({ persona, defaultStato, onSave, onClose, onDelete }) {
         <h2 style={{ fontWeight: 900, fontSize: 17, color: "var(--text)" }}>{persona ? "Modifica" : "+ Aggiungi"}</h2>
         <button onClick={onClose} style={{ background: "var(--bg3)", color: "var(--a2)", border: "1px solid var(--border2)", borderRadius: 8, cursor: "pointer", padding: "4px 10px", fontSize: 14 }}>X</button>
       </div>
+
+      {!persona && auth?.profile?.is_leader && downline?.length > 0 && (
+        <div style={{ marginBottom: 14, background: "var(--a1-13)", border: "1px solid var(--a1-25)", borderRadius: 11, padding: "11px 13px" }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: "var(--a2)", textTransform: "uppercase", letterSpacing: .8, marginBottom: 6, display: "block" }}>Assegna a</label>
+          <select value={form._assignTo || auth.userId} onChange={e => setForm(f => ({ ...f, _assignTo: e.target.value }))}>
+            <option value={auth.userId}>Te stesso</option>
+            {downline.map(m => <option key={m.id} value={m.id}>{m.nome || ""} {m.cognome || ""}</option>)}
+          </select>
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
         <div style={{ gridColumn: "1/-1" }}>
@@ -390,8 +400,9 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
         });
         showToast(form.stato === "venduto" ? "Segnato come venduto" : "Aggiornato");
       } else {
+        const assignTo = form._assignTo || auth.userId;
         const row = await sbInsertEventoPersona(auth.token, {
-          evento_id: eventoAttivo, user_id: auth.userId,
+          evento_id: eventoAttivo, user_id: assignTo,
           nome: form.nome, cognome: form.cognome || null, telefono: form.telefono || null,
           instagram: form.instagram || null, citta: form.citta || null, note: form.note || null,
           categoria: form.categoria || "team", sponsor: form.sponsor || null,
@@ -401,7 +412,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
         const created = Array.isArray(row) ? row[0] : row;
         setPersone(ps => [...ps, created]);
         if (created.stato === "venduto") setTuttiVenduti(tv => [...tv, created]);
-        showToast("Aggiunto");
+        showToast(assignTo === auth.userId ? "Aggiunto" : "Assegnato a " + ((downline.find(m => m.id === assignTo)?.nome) || "membro"));
       }
     } catch (e) { showToast("Errore: " + e.message, "#ef4444"); }
     setModal(null);
@@ -606,6 +617,8 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
               onSave={salvaPersona}
               onClose={() => setModal(null)}
               onDelete={modal.persona ? () => eliminaPersona(modal.persona.id) : null}
+              auth={auth}
+              downline={downline}
             />
           </div>
         </div>
