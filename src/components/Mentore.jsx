@@ -354,7 +354,7 @@ export function MentoreChatWidget({ insights }) {
   }
 
   return (
-    <div className="mentore-widget" style={{ position: "fixed", bottom: 22, right: 22, zIndex: 1500, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+    <div className="mentore-widget" style={{ position: "fixed", bottom: 22, right: 22, zIndex: 1500, display: "flex", flexDirection: "column", alignItems: "flex-end", pointerEvents: "none" }}>
       <div className="mentore-panel" style={{
         width: 340, maxHeight: 500, background: "var(--bg2)", border: "1px solid var(--border2)", borderRadius: 20,
         boxShadow: "0 18px 55px #000000b0", display: "flex", flexDirection: "column", overflow: "hidden",
@@ -402,7 +402,7 @@ export function MentoreChatWidget({ insights }) {
       </div>
 
       <button onClick={() => setOpen(o => !o)}
-        style={{ width: 58, height: 58, borderRadius: "50%", border: "none", cursor: "pointer", background: "linear-gradient(135deg,var(--a1),var(--a2))", boxShadow: "0 6px 20px var(--a1-31)", display: "flex", alignItems: "center", justifyContent: "center", transition: "transform .2s ease" }}>
+        style={{ width: 58, height: 58, borderRadius: "50%", border: "none", cursor: "pointer", background: "linear-gradient(135deg,var(--a1),var(--a2))", boxShadow: "0 6px 20px var(--a1-31)", display: "flex", alignItems: "center", justifyContent: "center", transition: "transform .2s ease", pointerEvents: "auto" }}>
         {open ? <CloseIcon size={20} color="#fff" /> : <ChatIcon size={24} color="#fff" />}
       </button>
     </div>
