@@ -220,6 +220,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   const [modal, setModal] = useState(null); // { mode: 'in_ballo'|'venduto', persona }
   const [filtroVenduti, setFiltroVenduti] = useState("tutti"); // 'tutti' | 'team' | 'prospect'
   const [filtroMembro, setFiltroMembro] = useState(""); // "" = tutti i membri
+  const [filtroSquadra, setFiltroSquadra] = useState(""); // "" | 'sinistra' | 'destra'
   const [membroEspanso, setMembroEspanso] = useState(null);
   const [cercaMembro, setCercaMembro] = useState("");
   const [soloLeader, setSoloLeader] = useState(false);
@@ -293,6 +294,14 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
 
   const vendutiSinistra = useMemo(() => venduti.filter(p => squadraOf[p.user_id] === "sinistra"), [venduti, squadraOf]);
   const vendutiDestra    = useMemo(() => venduti.filter(p => squadraOf[p.user_id] === "destra"), [venduti, squadraOf]);
+
+  // lista finale mostrata sotto le card Sinistra/Destra: filtrata per squadra (se scelta) e ordinata per % completamento crescente
+  const vendutiVisibili = useMemo(() =>
+    venduti
+      .filter(p => !filtroSquadra || squadraOf[p.user_id] === filtroSquadra)
+      .sort((a, b) => progressPercent(a) - progressPercent(b)),
+    [venduti, squadraOf, filtroSquadra]
+  );
 
   // un leader (o Dimitri) puo' modificare l'anagrafica di chiunque nella propria downline
   const canEdit = p => p.user_id === auth.userId || (auth?.profile?.is_leader && myTeamIds.has(p.user_id));
@@ -509,6 +518,11 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
                       <option value="team">Solo team</option>
                       <option value="prospect">Solo prospect</option>
                     </select>
+                    <select value={filtroSquadra} onChange={e => setFiltroSquadra(e.target.value)} style={{ width: "auto", minWidth: 130, fontSize: 12 }}>
+                      <option value="">Tutte le squadre</option>
+                      <option value="sinistra">Solo sinistra</option>
+                      <option value="destra">Solo destra</option>
+                    </select>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -522,9 +536,9 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 420, overflowY: "auto" }}>
-                  {venduti.length === 0
+                  {vendutiVisibili.length === 0
                     ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>Nessun ticket venduto ancora</div>
-                    : venduti.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner onClick={() => canEdit(p) && setModal({ persona: p })} />)
+                    : vendutiVisibili.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner onClick={() => canEdit(p) && setModal({ persona: p })} />)
                   }
                 </div>
               </div>
