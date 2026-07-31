@@ -50,7 +50,7 @@ const FASI_ONBOARDING = [
     titolo: "Fase 4",
     links: [
       { label: "Psicologia, basi e PAC - Click", url: "https://www.myclick.space/c/be-servizi-ita/sections/1099195/lessons/4189638" },
-      { label: "Onboarding SGM", url: "https://wowpowers.com/it/stream-player/marco_p/livestream/1f5e6f30-5cd8-4522-98a5-e254fff735dd" },
+      { label: "Onboarding SGM (la trovi nella sezione playlist)", url: "https://wowpowers.com/it/stream-player/marco_p/livestream/1f5e6f30-5cd8-4522-98a5-e254fff735dd" },
     ],
   },
 ];
