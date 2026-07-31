@@ -351,6 +351,7 @@ function AuthScreen({ onAuth }) {
   const [loading, setLoading] = useState(false);
   const [nome, setNome]       = useState("");
   const [cognome, setCognome] = useState("");
+  const [citta, setCitta]     = useState("");
   const [remember, setRemember] = useState(true);
   const [recoveryToken, setRecoveryToken] = useState(null);
   const [sponsorCode, setSponsorCode] = useState("");
@@ -435,6 +436,7 @@ function AuthScreen({ onAuth }) {
   async function submit() {
     if (!email.trim() || !pass.trim()) { setErr("Compila email e password"); return; }
     if (mode === "signup" && (!nome.trim() || !cognome.trim())) { setErr("Compila nome e cognome"); return; }
+    if (mode === "signup" && !citta.trim()) { setErr("Inserisci la tua città"); return; }
     if (mode === "signup" && !hasPendingRef && !sponsorCode.trim()) { setErr("Inserisci il codice sponsor — non puoi registrarti senza."); return; }
     setLoading(true); setErr(""); setMsg("");
     try {
@@ -461,7 +463,7 @@ function AuthScreen({ onAuth }) {
           }
           localStorage.removeItem("pending_ref");
           localStorage.removeItem("pending_ref_expires");
-          await sbCreateProfile(tok, { id:userId, email, nome:nome.trim(), cognome:cognome.trim(), upline_id:uplineId, positioned_under:uplineId, marketer_unlocked:false });
+          await sbCreateProfile(tok, { id:userId, email, nome:nome.trim(), cognome:cognome.trim(), citta:citta.trim(), upline_id:uplineId, positioned_under:uplineId, marketer_unlocked:false });
           const profile = await sbGetProfile(tok, userId);
           const authData = { token:tok, userId, email, profile:profile?.[0]||null };
           if (remember) localStorage.setItem("becrm_session", JSON.stringify(authData));
@@ -542,6 +544,13 @@ function AuthScreen({ onAuth }) {
                 <label style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"}}>Cognome *</label>
                 <input value={cognome} onChange={e=>setCognome(e.target.value)} placeholder="Rossi" />
               </div>
+            </div>
+          )}
+
+          {mode==="signup" && (
+            <div>
+              <label style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"}}>Città *</label>
+              <input value={citta} onChange={e=>setCitta(e.target.value)} placeholder="es. Milano" />
             </div>
           )}
 
@@ -642,6 +651,51 @@ function AuthScreen({ onAuth }) {
 }
 
 //  APP 
+function CittaRequiredScreen({ onSave, onLogout }) {
+  const [citta, setCitta]     = useState("");
+  const [err, setErr]         = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function salva() {
+    if (!citta.trim()) { setErr("Inserisci la tua città"); return; }
+    setLoading(true); setErr("");
+    try {
+      await onSave({ citta: citta.trim() });
+    } catch(e) { setErr("Errore durante il salvataggio: "+(e.message||"riprova")); }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--bg)",padding:16}}>
+      <div className="pop" style={{width:"100%",maxWidth:400,background:"var(--bg2)",border:"1px solid var(--border2)",borderRadius:20,padding:"2.2rem",boxShadow:"0 20px 70px #000000aa"}}>
+        <div style={{textAlign:"center",marginBottom:22}}>
+          <div style={{fontWeight:900,fontSize:20,color:"var(--text)",letterSpacing:-0.5}}>Kairos CRM</div>
+        </div>
+        <div style={{marginBottom:20}}>
+          <div style={{fontWeight:800,fontSize:15,color:"var(--text)",marginBottom:6}}>Manca la tua città</div>
+          <p style={{fontSize:12,color:"var(--muted)",lineHeight:1.5}}>Per apparire sulla mappa del team ci serve la città da cui operi. Inseriscila per continuare — te lo chiediamo una sola volta.</p>
+        </div>
+        <div style={{marginBottom:16}}>
+          <label style={{fontSize:11,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"}}>Città *</label>
+          <input value={citta} onChange={e=>setCitta(e.target.value)} placeholder="es. Milano" autoFocus
+            onKeyDown={e=>e.key==="Enter"&&salva()} />
+        </div>
+        {err && <div style={{background:"#ef444415",border:"1px solid #ef444435",borderRadius:9,padding:"9px 13px",fontSize:12,color:"#f87171",marginBottom:14,lineHeight:1.5}}>{err}</div>}
+        <button onClick={salva} disabled={loading}
+          style={{width:"100%",padding:"11px",background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:10,cursor:loading?"not-allowed":"pointer",fontWeight:800,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:loading?0.7:1}}>
+          {loading && <span className="spinner" />}
+          Continua
+        </button>
+        {onLogout && (
+          <div style={{textAlign:"center",marginTop:16,fontSize:11,color:"var(--muted)"}}>
+            <span onClick={onLogout} style={{color:"var(--muted)",cursor:"pointer",textDecoration:"underline"}}>Esci</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [auth, setAuth]           = useState(null);
   const [data, setData]           = useState([]);
@@ -1131,6 +1185,7 @@ export default function App() {
   });
 
   if (!auth) return <AuthScreen onAuth={setAuth} />;
+  if (auth.profile && !auth.profile.citta) return <CittaRequiredScreen onSave={updateProfile} onLogout={handleLogout} />;
   if (!ready) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--bg)",flexDirection:"column",gap:12}}>
       <span className="spinner" style={{width:28,height:28,borderWidth:3}} />
