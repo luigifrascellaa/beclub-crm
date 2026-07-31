@@ -35,8 +35,6 @@ const FASI_ONBOARDING = [
     links: [
       { label: "WES Stocks Base", url: "https://wowpowers.com/it/path/f373ccd8-44de-4c8e-bccc-c8cf094d45ae" },
       { label: "WES Stocks Intermedio", url: "https://wowpowers.com/it/catalog/paths/a9779909-3dbe-4880-ac2d-75b9f4c42068" },
-      { label: "Fascicolo THE M.A.P (da scaricare e stampare)", url: "https://drive.google.com/file/d/1QwcBaFJHPjPC01OrH4XDckqIEamdAq0x/view?usp=sharing" },
-      { label: "THE M.A.P percorso", url: "https://themap.click/map" },
     ],
   },
   {
