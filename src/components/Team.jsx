@@ -21,6 +21,11 @@ function cicloLabel(c){const r=CICLI.find(x=>x[0]===Number(c));if(!r)return"Cicl
 function dataByCiclo(arr,c){const r=CICLI.find(x=>x[0]===Number(c));if(!r)return[];return arr.filter(p=>p.conosciutoAt&&p.conosciutoAt>=r[1]&&p.conosciutoAt<r[2]);}
 const fmt=d=>d?new Date(d+"T12:00:00").toLocaleDateString("it-IT"):"\u2014";
 
+// Un membro è "attivo" se non ha stato_membro impostato (default storico) oppure se è esplicitamente "attivo".
+// rimborsato/mollato → escluso dai numeri aggregati (KPI, statistiche squadra, mappa), MAI dalla lista
+// membri o dal dettaglio: sponsor/upline devono continuare a vedere tutto quello che aveva.
+function isAttivo(m){ return !m||!m.stato_membro||m.stato_membro==="attivo"; }
+
 function teamStats(prospects){
   const total=prospects.length;
   const sub=prospects.filter(p=>p.fase==="SUB").length;
@@ -207,6 +212,7 @@ function buildTreeData(memberId, memberNome, memberCognome, memberEmail, allMemb
   const fullMember = allMembers.find(m => m.id === memberId);
   const isLeader = fullMember?.is_leader || false;
   const marketerUnlocked = fullMember?.marketer_unlocked || false;
+  const statoMembro = fullMember?.stato_membro || "attivo";
 
   const leftChild = sin.length > 0
     ? buildTreeData(sin[0].id, sin[0].nome, sin[0].cognome, sin[0].email, allMembers, dlProspects, positions, depth + 1, "sinistra")
@@ -217,7 +223,7 @@ function buildTreeData(memberId, memberNome, memberCognome, memberEmail, allMemb
 
   return {
     id: memberId, nome: memberNome, cognome: memberCognome, email: memberEmail,
-    depth, side, isRoot: depth === 0, ms, isLeader, marketerUnlocked,
+    depth, side, isRoot: depth === 0, ms, isLeader, marketerUnlocked, statoMembro,
     left: leftChild, right: rightChild,
   };
 }
@@ -265,7 +271,7 @@ function flattenTree(node, nodes, edges, parentPx) {
     nodes.push({ type: "empty", x: px.x, y: px.y, side: node.side, parentId: node.id.replace(/^empty-(sin|de)-/, "") });
     return;
   }
-  nodes.push({ type: "member", x: px.x, y: px.y, id: node.id, nome: node.nome, cognome: node.cognome, email: node.email, isRoot: node.isRoot, ms: node.ms, side: node.side, isLeader: node.isLeader, marketerUnlocked: node.marketerUnlocked });
+  nodes.push({ type: "member", x: px.x, y: px.y, id: node.id, nome: node.nome, cognome: node.cognome, email: node.email, isRoot: node.isRoot, ms: node.ms, side: node.side, isLeader: node.isLeader, marketerUnlocked: node.marketerUnlocked, statoMembro: node.statoMembro });
   flattenTree(node.left, nodes, edges, px);
   flattenTree(node.right, nodes, edges, px);
 }
@@ -327,8 +333,9 @@ function TreeCanvas({ memberId, memberNome, memberCognome, memberEmail, allMembe
         }
         const labelColor = n.side === "sinistra" ? "var(--a1)" : n.side === "destra" ? "#10b981" : null;
         const isClienteOnly = !n.isRoot && !(n.isLeader || n.marketerUnlocked);
+        const isSpento = !n.isRoot && n.statoMembro && n.statoMembro !== "attivo";
         return (
-          <div key={n.id} style={{ position: "absolute", left, top: n.y, width: NODE_W, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div key={n.id} style={{ position: "absolute", left, top: n.y, width: NODE_W, display: "flex", flexDirection: "column", alignItems: "center", opacity: isSpento ? 0.55 : 1 }}>
             {labelColor && (
               <div style={{ fontSize: 9, fontWeight: 800, color: labelColor, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 3, whiteSpace: "nowrap" }}>
                 {n.side === "sinistra" ? "\u2190 Sinistra" : "Destra \u2192"}
@@ -336,16 +343,21 @@ function TreeCanvas({ memberId, memberNome, memberCognome, memberEmail, allMembe
             )}
             <div onClick={() => !n.isRoot && onSelect && onSelect(allMembers.find(m => m.id === n.id))}
               style={{
-                background: n.isRoot ? "linear-gradient(135deg,var(--a1),var(--a2))" : isClienteOnly ? "#4ade8016" : "var(--bg4)",
-                border: "2px solid " + (n.isRoot ? "var(--a1)" : isClienteOnly ? "#4ade8065" : "var(--border2)"),
+                background: n.isRoot ? "linear-gradient(135deg,var(--a1),var(--a2))" : isSpento ? "#6b728012" : isClienteOnly ? "#4ade8016" : "var(--bg4)",
+                border: "2px solid " + (n.isRoot ? "var(--a1)" : isSpento ? "#6b728050" : isClienteOnly ? "#4ade8065" : "var(--border2)"),
                 borderRadius: 12, padding: "10px 14px", textAlign: "center",
                 cursor: n.isRoot ? "default" : "pointer", width: NODE_W - 8,
                 boxShadow: n.isRoot ? "0 0 20px var(--a1-25)" : "none",
+                filter: isSpento ? "grayscale(1)" : "none",
               }}>
-              <div style={{ fontWeight: 800, fontSize: 12, color: n.isRoot ? "#fff" : isClienteOnly ? "#4ade80" : "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <div style={{ fontWeight: 800, fontSize: 12, color: n.isRoot ? "#fff" : isSpento ? "#6b7280" : isClienteOnly ? "#4ade80" : "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {n.nome || n.email} {n.cognome || ""}
               </div>
-              {!n.isRoot && <div style={{ fontSize: 10, color: n.isRoot ? "rgba(255,255,255,.8)" : "var(--muted)", marginTop: 2 }}>{n.ms.sub} iscr {"\u00b7"} {n.ms.bv} BV</div>}
+              {!n.isRoot && (
+                <div style={{ fontSize: 10, color: isSpento ? "#6b7280" : "var(--muted)", marginTop: 2, fontWeight: isSpento ? 800 : 400 }}>
+                  {isSpento ? (n.statoMembro === "rimborsato" ? "Rimborsato" : "Mollato") : (n.ms.sub + " iscr \u00b7 " + n.ms.bv + " BV")}
+                </div>
+              )}
             </div>
           </div>
         );
@@ -496,7 +508,7 @@ function MappaTeam({ downline, dlProspects }) {
 }
 // ══════════════════════════════════════════════════════════════
 
-export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,positions,onOpenProspect,onPositionInTree,onToggleLeader,onToggleMarketer}){
+export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,positions,onOpenProspect,onPositionInTree,onToggleLeader,onToggleMarketer,onSetStatoMembro,onRimborsaMembro}){
   const[selectedMember,setSelectedMember]=useState(null);
   const[teamFilter,setTeamFilter]=useState("all");
   const[copied,setCopied]=useState(false);
@@ -545,9 +557,16 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
   const filteredMembers=teamFilter==="all"?downline:teamFilter==="sinistra"?sinistra:teamFilter==="destra"?destra:noTeam;
   function getMemberProspects(memberId){return dlByCiclo.filter(p=>p._userId===memberId);}
   function squadraStats(members){return teamStats(members.flatMap(m=>getMemberProspects(m.id)));}
-  const statsS=squadraStats(sinistra);
-  const statsD=squadraStats(destra);
-  const statsTot=teamStats(dlByCiclo);
+  // Sottoinsieme attivo — SOLO per i numeri aggregati (KPI, statistiche squadra, mappa).
+  // sinistra/destra/filteredMembers restano interi: la tabella Membri e l'albero devono
+  // continuare a mostrare tutti, rimborsati/mollati compresi, per poterli gestire/riattivare.
+  const downlineAttiva=downline.filter(isAttivo);
+  const sinistraAttiva=sinistra.filter(isAttivo);
+  const destraAttiva=destra.filter(isAttivo);
+  const dlByCicloAttivi=dlByCiclo.filter(p=>downlineAttiva.some(m=>m.id===p._userId));
+  const statsS=squadraStats(sinistraAttiva);
+  const statsD=squadraStats(destraAttiva);
+  const statsTot=teamStats(dlByCicloAttivi);
   const convColor=v=>v>=20?"#10b981":v>=10?"var(--a2)":"#f59e0b";
   const compareData=[{name:"In percorso",sinistra:statsS.act,destra:statsD.act},{name:"Iscritti",sinistra:statsS.sub,destra:statsD.sub},{name:"BV",sinistra:statsS.bv,destra:statsD.bv}];
   const ts={background:"var(--bg3)",border:"1px solid var(--border2)",borderRadius:8,color:"var(--text)",fontSize:12};
@@ -749,7 +768,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
           {activeTeamTab==="dashboard"&&(
             <>
               <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:16}}>
-                {[{label:"Membri",value:downline.length,color:"#8b5cf6",icon:""},{label:"In percorso",value:statsTot.act,color:"var(--a1)",icon:""},{label:"Iscritti",value:statsTot.sub,color:"#10b981",icon:""},{label:"Conv. team",value:statsTot.conv+"%",color:convColor(statsTot.conv),icon:""},{label:"BV team",value:statsTot.bv,color:"#f59e0b",icon:""}].map((k,i)=>(
+                {[{label:"Membri",value:downlineAttiva.length,color:"#8b5cf6",icon:""},{label:"In percorso",value:statsTot.act,color:"var(--a1)",icon:""},{label:"Iscritti",value:statsTot.sub,color:"#10b981",icon:""},{label:"Conv. team",value:statsTot.conv+"%",color:convColor(statsTot.conv),icon:""},{label:"BV team",value:statsTot.bv,color:"#f59e0b",icon:""}].map((k,i)=>(
                   <div key={i} style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
                     <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,"+k.color+","+k.color+"44)",borderRadius:"14px 14px 0 0"}}/>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
@@ -764,7 +783,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
               {(sinistra.length>0||destra.length>0)&&(
                 <>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-                    {[{team:"sinistra",stats:statsS,color:"var(--a1)",members:sinistra.length},{team:"destra",stats:statsD,color:"#10b981",members:destra.length}].map(({team,stats,color,members})=>(
+                    {[{team:"sinistra",stats:statsS,color:"var(--a1)",members:sinistraAttiva.length},{team:"destra",stats:statsD,color:"#10b981",members:destraAttiva.length}].map(({team,stats,color,members})=>(
                       <div key={team} style={{background:"var(--bg2)",border:"1px solid "+color+"28",borderRadius:14,padding:"1.2rem"}}>
                         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
                           <span style={{fontSize:13,fontWeight:900,color,textTransform:"capitalize"}}>Squadra {team}</span>
@@ -820,7 +839,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
             {downline.length===0
               ?<div style={{padding:"3rem",textAlign:"center",color:"var(--border2)"}}><div style={{fontSize:36,marginBottom:12}}>{"\u25c8"}</div><p style={{fontSize:14,marginBottom:8}}>Nessun membro ancora</p><p style={{fontSize:12,color:"var(--border2)"}}>Condividi il tuo link referral</p></div>
               :<table style={{width:"100%",borderCollapse:"collapse"}}>
-                <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Membro","Squadra","Prospect","Iscritti","Conv%","BV",...(auth.userId==="720d0d85-b356-46e7-8b27-0e33eeea9ae5"?["Leader"]:[]),...(auth?.profile?.is_leader?["Marketer"]:[]),"Azione",""].map(h=>(<th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
+                <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Membro","Squadra","Prospect","Iscritti","Conv%","BV",...(auth.userId==="720d0d85-b356-46e7-8b27-0e33eeea9ae5"?["Leader"]:[]),...(auth?.profile?.is_leader?["Marketer"]:[]),"Stato","Azione",""].map(h=>(<th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
                 <tbody>{filteredMembers.map(m=>{
                   const mP=getMemberProspects(m.id);
                   const ms=teamStats(mP);
@@ -863,6 +882,43 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
                           </button>
                         </td>
                       )}
+                      <td style={{padding:"12px 16px"}}>
+                        {isAttivo(m)
+                          ?<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                            <button
+                              onClick={()=>{
+                                if(teamCiclo==="ALL")return;
+                                const n=mP.length;
+                                if(!window.confirm("Stai per RIMBORSARE "+(m.nome||m.email)+".\n\nVerranno cancellati per sempre "+n+" CV prodotti nel ciclo "+teamCiclo+" (come se non fossero mai stati creati).\nNon potrà più accedere al CRM finché non lo riattivi.\n\nAzione irreversibile sui dati. Procedere?"))return;
+                                onRimborsaMembro(m.id,teamCiclo);
+                              }}
+                              disabled={teamCiclo==="ALL"}
+                              title={teamCiclo==="ALL"?"Seleziona un ciclo specifico (non \"Tutti i cicli\") per poter rimborsare":"Cancella i CV di questo ciclo e blocca l'accesso"}
+                              style={{padding:"5px 11px",borderRadius:8,border:"1px solid "+(teamCiclo==="ALL"?"var(--border2)":"#ef444460"),cursor:teamCiclo==="ALL"?"not-allowed":"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",background:teamCiclo==="ALL"?"var(--bg3)":"#ef444420",color:teamCiclo==="ALL"?"var(--border2)":"#f87171",opacity:teamCiclo==="ALL"?0.6:1}}>
+                              Rimborso
+                            </button>
+                            <button
+                              onClick={()=>{
+                                if(!window.confirm("Segnare "+(m.nome||m.email)+" come MOLLATO?\n\nRestera' escluso da tutti i calcoli/statistiche/mappa (i suoi CV e ticket restano visibili nello storico) e non potra' piu' accedere al CRM finche' non lo riattivi.\n\nProcedere?"))return;
+                                onSetStatoMembro(m.id,"mollato");
+                              }}
+                              title="Esclude dai calcoli e blocca l'accesso, senza cancellare nulla"
+                              style={{padding:"5px 11px",borderRadius:8,border:"1px solid var(--border2)",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",background:"var(--bg3)",color:"var(--muted)"}}>
+                              Mollato
+                            </button>
+                          </div>
+                          :<div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontSize:11,fontWeight:800,color:"#6b7280",background:"#6b728018",border:"1px solid #6b728040",borderRadius:7,padding:"4px 9px"}}>
+                              {m.stato_membro==="rimborsato"?"Rimborsato":"Mollato"}
+                            </span>
+                            <button onClick={()=>onSetStatoMembro(m.id,"attivo")}
+                              title="Riattiva l'accesso e reinserisce il membro nei calcoli (i CV eventualmente cancellati per rimborso non tornano)"
+                              style={{padding:"5px 11px",borderRadius:8,border:"1px solid #10b98160",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",background:"#10b98120",color:"#10b981"}}>
+                              Riattiva
+                            </button>
+                          </div>
+                        }
+                      </td>
                       <td style={{padding:"12px 16px"}}><button onClick={()=>setSelectedMember(m)} style={{padding:"6px 12px",background:"var(--bg4)",color:"var(--a2)",border:"1px solid var(--border2)",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:11}}>Dettaglio</button></td>
                       <td style={{padding:"12px 16px",color:"var(--border2)",fontSize:16}}>{"\u203a"}</td>
                     </tr>
@@ -875,7 +931,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
       )}
 
       {activeTeamTab==="mappa"&&(
-        <MappaTeam downline={downline} dlProspects={dlByCiclo} />
+        <MappaTeam downline={downlineAttiva} dlProspects={dlByCicloAttivi} />
       )}
     </div>
   );
