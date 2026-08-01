@@ -889,7 +889,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
                               onClick={()=>{
                                 if(teamCiclo==="ALL")return;
                                 const n=mP.length;
-                                if(!window.confirm("Stai per RIMBORSARE "+(m.nome||m.email)+".\n\nVerranno cancellati per sempre "+n+" CV prodotti nel ciclo "+teamCiclo+" (come se non fossero mai stati creati).\nNon potrà più accedere al CRM finché non lo riattivi.\n\nAzione irreversibile sui dati. Procedere?"))return;
+                                if(!window.confirm("Stai per RIMBORSARE "+(m.nome||m.email)+".\n\nVerranno cancellati per sempre "+n+" CV prodotti nel ciclo "+teamCiclo+" (come se non fossero mai stati creati), più il prospect della sua iscrizione originale se lo hai collegato dal dettaglio.\nNon potrà più accedere al CRM finché non lo riattivi.\n\nAzione irreversibile sui dati. Procedere?"))return;
                                 onRimborsaMembro(m.id,teamCiclo);
                               }}
                               disabled={teamCiclo==="ALL"}

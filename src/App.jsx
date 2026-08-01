@@ -85,6 +85,7 @@ function toApp(r) {
     telefono:r.telefono||"", instagram:r.instagram||"",
     checklist:r.checklist||{kyc:false,pandadoc:false,click:false},
     interesse:r.interesse||"", dataNascita:r.data_nascita||"",
+    convertedProfileId:r.converted_profile_id||null,
   };
 }
 function toDB(p, uid) {
@@ -96,6 +97,7 @@ function toDB(p, uid) {
     telefono:p.telefono||null, instagram:p.instagram||null,
     checklist:p.checklist||{kyc:false,pandadoc:false,click:false},
     interesse:p.interesse||null, data_nascita:p.dataNascita||null,
+    converted_profile_id:p.convertedProfileId||null,
   };
 }
 
@@ -996,6 +998,22 @@ export default function App() {
     } catch(e) { showToast("Errore salvataggio","#ef4444"); }
   }
 
+  // Collega (o scollega, con profileId=null) un prospect SUB al profilo membro in cui si è
+  // registrato — così il Rimborso può trovare e cancellare anche il BV dell'iscrizione originale,
+  // ovunque si trovi (nella lista tua o di un altro downline), non solo i CV che il membro produce.
+  async function linkProfilo(prospectId, profileId) {
+    const p=data.find(x=>x.id===prospectId)||dlProspects.find(x=>x.id===prospectId); if (!p) return;
+    const ownerId=p._userId||auth.userId;
+    const upd={...p,convertedProfileId:profileId};
+    try {
+      await sbUpdate(auth.token,prospectId,toDB(upd,ownerId));
+      if (data.find(x=>x.id===prospectId)) setData(d=>d.map(x=>x.id===prospectId?upd:x));
+      else setDlProspects(d=>d.map(x=>x.id===prospectId?{...upd,_userId:ownerId,_ownerName:x._ownerName}:x));
+      setSel(upd);
+      showToast(profileId?"Collegato al membro":"Scollegato");
+    } catch(e) { showToast("Errore salvataggio","#ef4444"); }
+  }
+
   async function deleteStorico(id, faseToRemove) {
     const p=data.find(x=>x.id===id)||dlProspects.find(x=>x.id===id); if (!p) return;
     const ownerId=p._userId||auth.userId;
@@ -1064,10 +1082,17 @@ export default function App() {
   // questa funzione (vedi dialog in Team.jsx), qui si esegue e basta.
   async function rimborsaMembro(memberId, ciclo) {
     try {
-      const daCancellare = dlProspects.filter(p => p._userId===memberId && cicloOfDate(p.conosciutoAt)===Number(ciclo));
+      // CV prodotti dal membro nel ciclo selezionato
+      const cvMembro = dlProspects.filter(p => p._userId===memberId && cicloOfDate(p.conosciutoAt)===Number(ciclo));
+      // Il prospect (SUB) collegato manualmente a questo membro — è la sua iscrizione originale,
+      // può stare nella tua lista personale o in quella di un altro downline: va cancellato sempre,
+      // a prescindere dal ciclo selezionato, perché è identificato esplicitamente.
+      const iscrizioneCollegata = [...data, ...dlProspects].filter(p => p.convertedProfileId===memberId);
+      const daCancellare = [...cvMembro, ...iscrizioneCollegata];
       if (daCancellare.length > 0) {
-        await sbDeleteMany(auth.token, daCancellare.map(p=>p.id));
         const idsRimossi = new Set(daCancellare.map(p=>p.id));
+        await sbDeleteMany(auth.token, [...idsRimossi]);
+        setData(d => d.filter(p => !idsRimossi.has(p.id)));
         setDlProspects(d => d.filter(p => !idsRimossi.has(p.id)));
       }
       await sbUpdateProfile(auth.token, memberId, { stato_membro: "rimborsato" });
@@ -1344,7 +1369,7 @@ export default function App() {
         <div onClick={closeModal} style={{position:"fixed",inset:0,background:"#00000090",backdropFilter:"blur(8px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16,animation:"fadeIn .2s"}}>
           <div className={"pop"} onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520,maxHeight:"90vh",overflowY:"auto",borderRadius:"16px"}}>
             {modal==="detail"
-              ? <DetailModal p={sel} onEdit={()=>{setForm({...sel});setModal("edit");}} onAdvance={()=>advanceFase(sel)} onFollowUp={()=>moveFase(sel,"DA_RISENTIRE")} onNonInt={()=>moveFase(sel,"NON_INT")} onNonPiace={()=>moveFase(sel,"NON_PIACE")} onDaRifissare={()=>moveFase(sel,"DA_RIFISSARE")} onRiattiva={()=>moveFase(sel,"RIATTIVA")} onClose={closeModal} onUpdateProfilo={pr=>updateProfilo(sel.id,pr)} onUpdateChecklist={cl=>updateChecklist(sel.id,cl)} onDeleteStorico={fase=>deleteStorico(sel.id,fase)} onUpdateStoricoData={(fase,data,newFase,newStorico)=>updateStoricoData(sel.id,fase,data,newFase,newStorico)} />
+              ? <DetailModal p={sel} onEdit={()=>{setForm({...sel});setModal("edit");}} onAdvance={()=>advanceFase(sel)} onFollowUp={()=>moveFase(sel,"DA_RISENTIRE")} onNonInt={()=>moveFase(sel,"NON_INT")} onNonPiace={()=>moveFase(sel,"NON_PIACE")} onDaRifissare={()=>moveFase(sel,"DA_RIFISSARE")} onRiattiva={()=>moveFase(sel,"RIATTIVA")} onClose={closeModal} onUpdateProfilo={pr=>updateProfilo(sel.id,pr)} onUpdateChecklist={cl=>updateChecklist(sel.id,cl)} onDeleteStorico={fase=>deleteStorico(sel.id,fase)} onUpdateStoricoData={(fase,data,newFase,newStorico)=>updateStoricoData(sel.id,fase,data,newFase,newStorico)} downline={downline} onLinkProfilo={linkProfilo} />
               : <FormModal form={form} setForm={setForm} onSave={saveForm} onClose={closeModal} onDelete={modal==="edit"?()=>deleteProp(form.id):null} isEdit={modal==="edit"} auth={auth} downline={downline} />
             }
           </div>
@@ -2077,7 +2102,7 @@ function ProfilazioneTab({ p, onUpdateProfilo }) {
 }
 
 //  DETAIL MODAL 
-function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, onDaRifissare, onRiattiva, onClose, onUpdateProfilo, onUpdateChecklist, onDeleteStorico, onUpdateStoricoData }) {
+function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, onDaRifissare, onRiattiva, onClose, onUpdateProfilo, onUpdateChecklist, onDeleteStorico, onUpdateStoricoData, downline, onLinkProfilo }) {
   const [activeTab,setActiveTab]=useState("dettagli");
   const [stepPopup, setStepPopup]=useState(null); // {fase, date}
   const [stepDate, setStepDate]=useState("");
@@ -2157,6 +2182,30 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, o
                   }} style={{padding:"7px 14px",background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontWeight:800,fontSize:12}}>Salva</button>
                 </div>
               </div>
+            </div>
+          )}
+          {p.fase==="SUB" && (
+            <div style={{...box,marginBottom:9,border:"1px solid "+(p.convertedProfileId?"#8b5cf640":"var(--border)")}}>
+              <div style={lbl}>Collegato a membro registrato</div>
+              {p.convertedProfileId
+                ? (() => {
+                    const linked = downline.find(m=>m.id===p.convertedProfileId);
+                    return (
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
+                        <span style={{color:"#c084fc",fontWeight:700,fontSize:13}}>{linked?(linked.nome||linked.email)+" "+(linked.cognome||""):"Membro non trovato"}</span>
+                        <button onClick={()=>onLinkProfilo(p.id,null)} style={{padding:"4px 10px",background:"var(--bg4)",color:"var(--muted)",border:"1px solid var(--border2)",borderRadius:7,cursor:"pointer",fontWeight:600,fontSize:11}}>Scollega</button>
+                      </div>
+                    );
+                  })()
+                : (
+                  <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                    <select onChange={e=>{if(e.target.value)onLinkProfilo(p.id,e.target.value);}} defaultValue="" style={{flex:1,minWidth:180,fontSize:12,padding:"6px 9px"}}>
+                      <option value="">Nessuno — seleziona chi si è registrato</option>
+                      {downline.map(m=>(<option key={m.id} value={m.id}>{(m.nome||m.email)+" "+(m.cognome||"")}</option>))}
+                    </select>
+                  </div>
+                )}
+              <div style={{fontSize:10,color:"var(--muted)",marginTop:5,lineHeight:1.4}}>Se questa persona si è poi registrata al CRM come membro del team, collegala qui: se in futuro viene rimborsata, questo BV verrà tolto insieme ai suoi CV.</div>
             </div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:9}}>
