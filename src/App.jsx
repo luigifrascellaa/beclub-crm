@@ -44,6 +44,7 @@ const sbList    = (tok, uid)       => sbFetch("/rest/v1/prospects?select=*&order
 const sbInsert  = (tok, row)       => sbFetch("/rest/v1/prospects", { method:"POST", _token:tok, body:JSON.stringify(row) });
 const sbUpdate  = (tok, id, row)   => sbFetch("/rest/v1/prospects?id=eq."+id, { method:"PATCH", _token:tok, body:JSON.stringify(row) });
 const sbDelete  = (tok, id)        => sbFetch("/rest/v1/prospects?id=eq."+id, { method:"DELETE", _token:tok });
+const sbDeleteMany = (tok, ids)    => sbFetch("/rest/v1/prospects?id=in.("+ids.join(",")+")", { method:"DELETE", _token:tok });
 
 // Profile helpers
 const sbGetProfile      = (tok, uid)        => sbFetch("/rest/v1/profiles?id=eq."+uid+"&select=*", { _token:tok });
@@ -68,6 +69,11 @@ const sbInsertEventoPersona = (tok, row)    => sbFetch("/rest/v1/evento_persone"
 const sbUpdateEventoPersona = (tok, id, row) => sbFetch("/rest/v1/evento_persone?id=eq."+id, { method:"PATCH", _token:tok, body:JSON.stringify(row) });
 const sbDeleteEventoPersona = (tok, id)     => sbFetch("/rest/v1/evento_persone?id=eq."+id, { method:"DELETE", _token:tok });
 
+
+// Un membro è "attivo" se non ha stato_membro impostato (default storico) oppure se è esplicitamente "attivo".
+// "rimborsato"/"mollato" → escluso dai calcoli aggregati (KPI, statistiche team, mappa) ma resta
+// visibile per intero (prospect, ticket, dettaglio) a sponsor/upline — vedi CLAUDE.md sezione Stato Membro.
+function isAttivo(m) { return !m || !m.stato_membro || m.stato_membro === "attivo"; }
 
 function toApp(r) {
   return {
@@ -490,7 +496,13 @@ function AuthScreen({ onAuth }) {
             await sbCreateProfile(tok, { id:userId, email });
             profile = await sbGetProfile(tok, userId);
           }
-          const authData = { token:tok, userId, email, profile:profile?.[0]||null };
+          const prof = profile?.[0]||null;
+          if (prof && !isAttivo(prof)) {
+            setErr("Accesso sospeso dal tuo upline. Contattalo per riattivarlo.");
+            setLoading(false);
+            return;
+          }
+          const authData = { token:tok, userId, email, profile:prof };
           if (remember) localStorage.setItem("becrm_session", JSON.stringify(authData));
           onAuth(authData);
         } else {
@@ -690,6 +702,26 @@ function CittaRequiredScreen({ onSave, onLogout }) {
           <div style={{textAlign:"center",marginTop:16,fontSize:11,color:"var(--muted)"}}>
             <span onClick={onLogout} style={{color:"var(--muted)",cursor:"pointer",textDecoration:"underline"}}>Esci</span>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AccessoSospesoScreen({ stato, onLogout }) {
+  return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--bg)",padding:16}}>
+      <div className="pop" style={{width:"100%",maxWidth:400,background:"var(--bg2)",border:"1px solid var(--border2)",borderRadius:20,padding:"2.2rem",boxShadow:"0 20px 70px #000000aa",textAlign:"center"}}>
+        <div style={{fontWeight:900,fontSize:20,color:"var(--text)",letterSpacing:-0.5,marginBottom:22}}>Kairos CRM</div>
+        <div style={{fontWeight:800,fontSize:15,color:"var(--text)",marginBottom:8}}>Accesso sospeso</div>
+        <p style={{fontSize:12,color:"var(--muted)",lineHeight:1.6,marginBottom:20}}>
+          Il tuo account è stato segnato come {stato==="rimborsato"?"rimborsato":"mollato"} dal tuo upline e l accesso al CRM è sospeso. Contattalo per farlo riattivare.
+        </p>
+        {onLogout && (
+          <button onClick={onLogout}
+            style={{width:"100%",padding:"11px",background:"var(--bg4)",color:"var(--muted)",border:"1px solid var(--border2)",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:13}}>
+            Esci
+          </button>
         )}
       </div>
     </div>
@@ -1016,6 +1048,34 @@ export default function App() {
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
   }
 
+  // Cambia solo lo stato (attivo/mollato/riattiva) — nessuna cancellazione dati.
+  // Usato per "Mollato" e per il tasto "Riattiva" su un membro rimborsato o mollato.
+  async function setStatoMembro(memberId, stato) {
+    if (memberId === auth.userId) { showToast("Non puoi farlo sul tuo account","#ef4444"); return; }
+    try {
+      await sbUpdateProfile(auth.token, memberId, { stato_membro: stato });
+      setDownline(d => d.map(m => m.id===memberId ? {...m, stato_membro:stato} : m));
+      showToast(stato==="attivo" ? "Membro riattivato" : "Membro segnato come mollato");
+    } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
+  }
+
+  // Rimborso: cancella davvero (DELETE) tutti i CV che quel membro ha prodotto nel ciclo indicato,
+  // poi lo marca come rimborsato. Irreversibile sui dati — la conferma va chiesta PRIMA di chiamare
+  // questa funzione (vedi dialog in Team.jsx), qui si esegue e basta.
+  async function rimborsaMembro(memberId, ciclo) {
+    try {
+      const daCancellare = dlProspects.filter(p => p._userId===memberId && cicloOfDate(p.conosciutoAt)===Number(ciclo));
+      if (daCancellare.length > 0) {
+        await sbDeleteMany(auth.token, daCancellare.map(p=>p.id));
+        const idsRimossi = new Set(daCancellare.map(p=>p.id));
+        setDlProspects(d => d.filter(p => !idsRimossi.has(p.id)));
+      }
+      await sbUpdateProfile(auth.token, memberId, { stato_membro: "rimborsato" });
+      setDownline(d => d.map(m => m.id===memberId ? {...m, stato_membro:"rimborsato"} : m));
+      showToast(daCancellare.length>0 ? "Rimborsato — "+daCancellare.length+" CV cancellati" : "Rimborsato");
+    } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
+  }
+
 
   async function updateProfile(fields, silent) {
     try {
@@ -1118,8 +1178,14 @@ export default function App() {
     } catch(e) { showToast("Errore export","#ef4444"); }
   }
 
+  // Membri attivi (esclude rimborsato/mollato) — usato SOLO per i numeri aggregati
+  // (KPI dashboard, statistiche team, mappa). Le liste/dettagli restano sempre sull'intera downline:
+  // sponsor/upline devono continuare a vedere tutto quello che un membro rimborsato/mollato aveva.
+  const downlineAttiva = downline.filter(isAttivo);
+  const dlProspectsAttivi = dlProspects.filter(p => downlineAttiva.some(m => m.id === p._userId));
+
   // Dati da usare nella dashboard in base alla modalità
-  const dashData = dashMode === "team" ? [...data, ...dlProspects] : data;
+  const dashData = dashMode === "team" ? [...data, ...dlProspectsAttivi] : data;
 
   const cd    = dataByCiclo(dashData, dashCiclo);
   const cdSub = cd.filter(p=>p.fase==="SUB");
@@ -1148,7 +1214,7 @@ export default function App() {
   // Insight del Mentore: personal + team combinati, ricalcolati ad ogni cambio dati
   const cicloRangeCorrente = CICLI.find(c => c[0] === CICLO_CORRENTE);
   const tuttiProspectMentore = [...data.map(p => ({ ...p, _userId: auth?.userId })), ...teamProspects];
-  const mentoreInsights = auth ? computeMentoreInsights(tuttiProspectMentore, downline, cicloRangeCorrente, allProfiles, auth.userId) : null;
+  const mentoreInsights = auth ? computeMentoreInsights(tuttiProspectMentore, downlineAttiva, cicloRangeCorrente, allProfiles, auth.userId) : null;
 
   const listaSource = listaMode === "team" ? teamProspects : data;
   const listaData=listaSource.filter(p=>{
@@ -1185,6 +1251,7 @@ export default function App() {
   });
 
   if (!auth) return <AuthScreen onAuth={setAuth} />;
+  if (auth.profile && !isAttivo(auth.profile)) return <AccessoSospesoScreen stato={auth.profile.stato_membro} onLogout={handleLogout} />;
   if (auth.profile && !auth.profile.citta) return <CittaRequiredScreen onSave={updateProfile} onLogout={handleLogout} />;
   if (!ready) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--bg)",flexDirection:"column",gap:12}}>
@@ -1226,7 +1293,7 @@ export default function App() {
 
       <div className="drawer-scrim" onClick={()=>setMobileDrawerOpen(false)} style={{position:"fixed",inset:0,zIndex:1700,background:"#00000090",opacity:mobileDrawerOpen?1:0,pointerEvents:mobileDrawerOpen?"auto":"none",transition:"opacity .2s ease"}} />
 
-      <Sidebar view={view} setView={v=>{setView(v);setMobileDrawerOpen(false);}} data={data} urgenti={urgenti} onAdd={()=>{openAdd();setMobileDrawerOpen(false);}} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downline.length} sidebarMode={sidebarMode} setSidebarMode={setSidebarMode} appMode={appMode} setAppMode={m=>{setAppMode(m);setMobileDrawerOpen(false);}} showToast={showToast} drawerOpen={mobileDrawerOpen} onCloseDrawer={()=>setMobileDrawerOpen(false)} />
+      <Sidebar view={view} setView={v=>{setView(v);setMobileDrawerOpen(false);}} data={data} urgenti={urgenti} onAdd={()=>{openAdd();setMobileDrawerOpen(false);}} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downlineAttiva.length} sidebarMode={sidebarMode} setSidebarMode={setSidebarMode} appMode={appMode} setAppMode={m=>{setAppMode(m);setMobileDrawerOpen(false);}} showToast={showToast} drawerOpen={mobileDrawerOpen} onCloseDrawer={()=>setMobileDrawerOpen(false)} />
 
       <main className="mc" style={{flex:1,overflowY:"auto",height:"100vh",paddingBottom:0}}>
         {(appMode==="cliente" || !(auth?.profile?.marketer_unlocked || auth?.profile?.is_leader)) ? (
@@ -1235,15 +1302,15 @@ export default function App() {
           <>
             {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} cdChiusi={cdChiusi} cdForzaChiusura={cdForzaChiusura} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} />}
             {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale")setFMembro("");}} hasTeam={dlProspects.length>0} />}
-            {view==="stats"   && <Statistiche data={data} dlProspects={dlProspects} />}
-            {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} onToggleMarketer={toggleMarketerUnlocked} />}
+            {view==="stats"   && <Statistiche data={data} dlProspects={dlProspectsAttivi} />}
+            {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} onToggleMarketer={toggleMarketerUnlocked} onSetStatoMembro={setStatoMembro} onRimborsaMembro={rimborsaMembro} />}
             {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} />}
             {view==="eventi"  && <EventiView auth={auth} allProfiles={allProfiles} downline={downline} positions={positions} showToast={showToast}
               sbListEventi={sbListEventi}
               sbListEventoPersone={sbListEventoPersone} sbInsertEventoPersona={sbInsertEventoPersona}
               sbUpdateEventoPersona={sbUpdateEventoPersona} sbDeleteEventoPersona={sbDeleteEventoPersona}
               LUDOVICO_ID={LUDOVICO_ID} onTicketCountChange={setTicketVendutiCount} />}
-            {view==="profilo" && <ProfiloView auth={auth} onUpdateProfile={updateProfile} downlineCount={downline.length} showToast={showToast} />}
+            {view==="profilo" && <ProfiloView auth={auth} onUpdateProfile={updateProfile} downlineCount={downlineAttiva.length} showToast={showToast} />}
           </>
         )}
       </main>
@@ -1253,7 +1320,7 @@ export default function App() {
         {[
           {id:"dash",label:"Home"},
           {id:"lista",label:"Prospect",badge:data.length},
-          {id:"team",label:"Team",badge:downline.length||0},
+          {id:"team",label:"Team",badge:downlineAttiva.length||0},
           {id:"nomi",label:"Lista"},
           {id:"eventi",label:"Eventi"},
           {id:"profilo",label:"Profilo"},
