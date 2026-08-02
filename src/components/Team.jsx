@@ -4,8 +4,10 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 const FASI_DASH = ["FUP1","FUP2","PACK","CLOSING","SUB"];
-const FASE_CLR = {INVITO:"#8b5cf6",FUP1:"var(--a1)",FUP2:"#3b82f6",PACK:"var(--a2)",CLOSING:"#22d3ee",SUB:"#10b981",FOLLOW_UP:"#f59e0b",NON_INT:"#6b7280"};
-const FASE_LABEL = {INVITO:"Invito",FUP1:"FUP 1",FUP2:"FUP 2",PACK:"Pack",CLOSING:"Closing",SUB:"Iscritto",FOLLOW_UP:"Follow Up",NON_INT:"Non Int."};
+const FASE_CLR = {INVITO:"#8b5cf6",FUP1:"var(--a1)",FUP2:"#3b82f6",PACK:"var(--a2)",CLOSING:"#22d3ee",SUB:"#10b981",FOLLOW_UP:"#f59e0b",NON_INT:"#6b7280",RIMBORSO:"#ef4444"};
+const FASE_LABEL = {INVITO:"Invito",FUP1:"FUP 1",FUP2:"FUP 2",PACK:"Pack",CLOSING:"Closing",SUB:"Iscritto",FOLLOW_UP:"Follow Up",NON_INT:"Non Int.",RIMBORSO:"Rimborso"};
+// Un prospect in fase RIMBORSO resta in lista ma va sempre escluso prima di teamStats/funnel.
+function isProspectAttivo(p){ return !p||p.fase!=="RIMBORSO"; }
 const PACCHETTI = [{key:"starter",label:"Starter",bv:100},{key:"standard",label:"Standard",bv:250},{key:"premium",label:"Premium",bv:550},{key:"signature",label:"Signature",bv:1025},{key:"altro",label:"Altro",bv:0}];
 function bvOfPacchetto(key, bvCustom){
   if(key==="altro") return bvCustom||0;
@@ -556,14 +558,14 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
   const posizionati=downline.filter(m=>m.positioned_under);
   const filteredMembers=teamFilter==="all"?downline:teamFilter==="sinistra"?sinistra:teamFilter==="destra"?destra:noTeam;
   function getMemberProspects(memberId){return dlByCiclo.filter(p=>p._userId===memberId);}
-  function squadraStats(members){return teamStats(members.flatMap(m=>getMemberProspects(m.id)));}
+  function squadraStats(members){return teamStats(members.flatMap(m=>getMemberProspects(m.id).filter(isProspectAttivo)));}
   // Sottoinsieme attivo — SOLO per i numeri aggregati (KPI, statistiche squadra, mappa).
   // sinistra/destra/filteredMembers restano interi: la tabella Membri e l'albero devono
   // continuare a mostrare tutti, rimborsati/mollati compresi, per poterli gestire/riattivare.
   const downlineAttiva=downline.filter(isAttivo);
   const sinistraAttiva=sinistra.filter(isAttivo);
   const destraAttiva=destra.filter(isAttivo);
-  const dlByCicloAttivi=dlByCiclo.filter(p=>downlineAttiva.some(m=>m.id===p._userId));
+  const dlByCicloAttivi=dlByCiclo.filter(p=>downlineAttiva.some(m=>m.id===p._userId)&&isProspectAttivo(p));
   const statsS=squadraStats(sinistraAttiva);
   const statsD=squadraStats(destraAttiva);
   const statsTot=teamStats(dlByCicloAttivi);
@@ -889,11 +891,11 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
                               onClick={()=>{
                                 if(teamCiclo==="ALL")return;
                                 const n=mP.length;
-                                if(!window.confirm("Stai per RIMBORSARE "+(m.nome||m.email)+".\n\nVerranno cancellati per sempre "+n+" CV prodotti nel ciclo "+teamCiclo+" (come se non fossero mai stati creati), più il prospect della sua iscrizione originale se lo hai collegato dal dettaglio.\nNon potrà più accedere al CRM finché non lo riattivi.\n\nAzione irreversibile sui dati. Procedere?"))return;
+                                if(!window.confirm("Stai per RIMBORSARE "+(m.nome||m.email)+".\n\n"+n+" CV prodotti nel ciclo "+teamCiclo+" (più il prospect della sua iscrizione originale se lo hai collegato dal dettaglio) verranno spostati in fase \"Rimborso\": restano visibili in anagrafica ma escluse da ogni calcolo/BV/mappa.\nNon potrà più accedere al CRM finché non lo riattivi.\n\nNota: se poi riattivi il membro, questi CV restano in fase Rimborso — vanno rimessi a mano nella fase giusta se serve. Procedere?"))return;
                                 onRimborsaMembro(m.id,teamCiclo);
                               }}
                               disabled={teamCiclo==="ALL"}
-                              title={teamCiclo==="ALL"?"Seleziona un ciclo specifico (non \"Tutti i cicli\") per poter rimborsare":"Cancella i CV di questo ciclo e blocca l'accesso"}
+                              title={teamCiclo==="ALL"?"Seleziona un ciclo specifico (non \"Tutti i cicli\") per poter rimborsare":"Sposta i CV di questo ciclo in fase Rimborso e blocca l'accesso"}
                               style={{padding:"5px 11px",borderRadius:8,border:"1px solid "+(teamCiclo==="ALL"?"var(--border2)":"#ef444460"),cursor:teamCiclo==="ALL"?"not-allowed":"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",background:teamCiclo==="ALL"?"var(--bg3)":"#ef444420",color:teamCiclo==="ALL"?"var(--border2)":"#f87171",opacity:teamCiclo==="ALL"?0.6:1}}>
                               Rimborso
                             </button>

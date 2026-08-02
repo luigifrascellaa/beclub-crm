@@ -45,6 +45,7 @@ const sbInsert  = (tok, row)       => sbFetch("/rest/v1/prospects", { method:"PO
 const sbUpdate  = (tok, id, row)   => sbFetch("/rest/v1/prospects?id=eq."+id, { method:"PATCH", _token:tok, body:JSON.stringify(row) });
 const sbDelete  = (tok, id)        => sbFetch("/rest/v1/prospects?id=eq."+id, { method:"DELETE", _token:tok });
 const sbDeleteMany = (tok, ids)    => sbFetch("/rest/v1/prospects?id=in.("+ids.join(",")+")", { method:"DELETE", _token:tok });
+const sbUpdateMany = (tok, ids, fields) => sbFetch("/rest/v1/prospects?id=in.("+ids.join(",")+")", { method:"PATCH", _token:tok, body: JSON.stringify(fields) });
 
 // Profile helpers
 const sbGetProfile      = (tok, uid)        => sbFetch("/rest/v1/profiles?id=eq."+uid+"&select=*", { _token:tok });
@@ -116,20 +117,24 @@ function bvOfPacchetto(key, bvCustom) {
 
 const FASI_FUNNEL   = ["INVITO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
 const FASI_DASH     = ["CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
-const FASI_SPECIALI = ["DA_RISENTIRE","DA_RIFISSARE","NON_INT","NON_PIACE"];
+const FASI_SPECIALI = ["DA_RISENTIRE","DA_RIFISSARE","NON_INT","NON_PIACE","RIMBORSO"];
 const FASI          = [...FASI_FUNNEL, ...FASI_SPECIALI];
 const FONTI         = ["Instagram","TikTok","Offline","Referenza","Lista Nomi","Modulo"];
 const FONTE_ICO     = { Instagram:"", TikTok:"", Offline:"", Referenza:"", "Lista Nomi":"", Modulo:"" };
 const INTERESSE     = ["Alto","Medio","Basso"];
 const INTERESSE_CLR = { Alto:"#10b981", Medio:"#f59e0b", Basso:"#ef4444" };
+// Un prospect in fase RIMBORSO resta nell'anagrafica (mai cancellato) ma va escluso da qualunque
+// calcolo aggregato — funnel, BV, conversione, dashboard — ovunque venga letto un array di prospect
+// prima di passarlo a teamStats/funnel: filtrare sempre con isProspectAttivo.
+function isProspectAttivo(p) { return !p || p.fase !== "RIMBORSO"; }
 
 const FASE_CLR = {
   INVITO:"#8b5cf6", CONOSCITIVA:"#7c3aed", FUP1:"#2563eb", FUP2:"#3b82f6", PACK:"var(--a2)",
-  CLOSING:"#22d3ee", SUB:"#10b981", DA_RISENTIRE:"#f59e0b", DA_RIFISSARE:"#f97316", NON_INT:"#6b7280", NON_PIACE:"#ec4899",
+  CLOSING:"#22d3ee", SUB:"#10b981", DA_RISENTIRE:"#f59e0b", DA_RIFISSARE:"#f97316", NON_INT:"#6b7280", NON_PIACE:"#ec4899", RIMBORSO:"#ef4444",
 };
 const FASE_LABEL = {
   INVITO:"Invito", CONOSCITIVA:"Conoscitiva", FUP1:"FUP 1", FUP2:"FUP 2", PACK:"Pack",
-  CLOSING:"Closing", SUB:"Iscritto", DA_RISENTIRE:"Da risentire", DA_RIFISSARE:"Da rifissare", NON_INT:"Non Int.", NON_PIACE:"Non mi piace",
+  CLOSING:"Closing", SUB:"Iscritto", DA_RISENTIRE:"Da risentire", DA_RIFISSARE:"Da rifissare", NON_INT:"Non Int.", NON_PIACE:"Non mi piace", RIMBORSO:"Rimborso",
 };
 
 const PLEASURES = [
@@ -1082,22 +1087,25 @@ export default function App() {
   // questa funzione (vedi dialog in Team.jsx), qui si esegue e basta.
   async function rimborsaMembro(memberId, ciclo) {
     try {
-      // CV prodotti dal membro nel ciclo selezionato
-      const cvMembro = dlProspects.filter(p => p._userId===memberId && cicloOfDate(p.conosciutoAt)===Number(ciclo));
+      // CV prodotti dal membro nel ciclo selezionato — non cancellati, spostati in fase "Rimborso":
+      // restano nell'anagrafica/lista prospect (come Non Int./Da rifissare), ma sono esclusi da
+      // ogni calcolo aggregato (vedi isProspectAttivo, usato ovunque prima di teamStats/funnel).
+      const cvMembro = dlProspects.filter(p => p._userId===memberId && Number(cicloOfDate(p.conosciutoAt))===Number(ciclo) && p.fase!=="RIMBORSO");
       // Il prospect (SUB) collegato manualmente a questo membro — è la sua iscrizione originale,
-      // può stare nella tua lista personale o in quella di un altro downline: va cancellato sempre,
+      // può stare nella tua lista personale o in quella di un altro downline: va spostato sempre,
       // a prescindere dal ciclo selezionato, perché è identificato esplicitamente.
-      const iscrizioneCollegata = [...data, ...dlProspects].filter(p => p.convertedProfileId===memberId);
-      const daCancellare = [...cvMembro, ...iscrizioneCollegata];
-      if (daCancellare.length > 0) {
-        const idsRimossi = new Set(daCancellare.map(p=>p.id));
-        await sbDeleteMany(auth.token, [...idsRimossi]);
-        setData(d => d.filter(p => !idsRimossi.has(p.id)));
-        setDlProspects(d => d.filter(p => !idsRimossi.has(p.id)));
+      const iscrizioneCollegata = [...data, ...dlProspects].filter(p => p.convertedProfileId===memberId && p.fase!=="RIMBORSO");
+      const daSpostare = [...cvMembro, ...iscrizioneCollegata];
+      if (daSpostare.length > 0) {
+        const ids = [...new Set(daSpostare.map(p=>p.id))];
+        await sbUpdateMany(auth.token, ids, { fase: "RIMBORSO" });
+        const idsSet = new Set(ids);
+        setData(d => d.map(p => idsSet.has(p.id) ? {...p, fase:"RIMBORSO"} : p));
+        setDlProspects(d => d.map(p => idsSet.has(p.id) ? {...p, fase:"RIMBORSO"} : p));
       }
       await sbUpdateProfile(auth.token, memberId, { stato_membro: "rimborsato" });
       setDownline(d => d.map(m => m.id===memberId ? {...m, stato_membro:"rimborsato"} : m));
-      showToast(daCancellare.length>0 ? "Rimborsato — "+daCancellare.length+" CV cancellati" : "Rimborsato");
+      showToast(daSpostare.length>0 ? "Rimborsato — "+daSpostare.length+" CV spostati in Rimborso" : "Rimborsato");
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
   }
 
@@ -1210,7 +1218,7 @@ export default function App() {
   const dlProspectsAttivi = dlProspects.filter(p => downlineAttiva.some(m => m.id === p._userId));
 
   // Dati da usare nella dashboard in base alla modalità
-  const dashData = dashMode === "team" ? [...data, ...dlProspectsAttivi] : data;
+  const dashData = (dashMode === "team" ? [...data, ...dlProspectsAttivi] : data).filter(isProspectAttivo);
 
   const cd    = dataByCiclo(dashData, dashCiclo);
   const cdSub = cd.filter(p=>p.fase==="SUB");
@@ -1226,7 +1234,7 @@ export default function App() {
   const cdForzaChiusura = cdChiusi.length?Math.round(cdSub.length/cdChiusi.length*100):0;
   const totSub  = dashData.filter(p=>p.fase==="SUB").length;
   const totConv = dashData.length?Math.round(totSub/dashData.length*100):0;
-  const urgenti = data.filter(p=>(isOver(p.followUp)||isToday(p.followUp))&&p.fase!=="NON_INT"&&p.fase!=="NON_PIACE"&&p.fase!=="DA_RIFISSARE");
+  const urgenti = data.filter(p=>(isOver(p.followUp)||isToday(p.followUp))&&p.fase!=="NON_INT"&&p.fase!=="NON_PIACE"&&p.fase!=="DA_RIFISSARE"&&p.fase!=="RIMBORSO");
   const funnelCounts=FASI_DASH.map(f=>({f,n:cd.filter(p=>p.fase===f).length}));
   const funnelMax=Math.max(cd.length,1);
 
@@ -1238,7 +1246,7 @@ export default function App() {
 
   // Insight del Mentore: personal + team combinati, ricalcolati ad ogni cambio dati
   const cicloRangeCorrente = CICLI.find(c => c[0] === CICLO_CORRENTE);
-  const tuttiProspectMentore = [...data.map(p => ({ ...p, _userId: auth?.userId })), ...teamProspects];
+  const tuttiProspectMentore = [...data.map(p => ({ ...p, _userId: auth?.userId })), ...teamProspects].filter(isProspectAttivo);
   const mentoreInsights = auth ? computeMentoreInsights(tuttiProspectMentore, downlineAttiva, cicloRangeCorrente, allProfiles, auth.userId) : null;
 
   const listaSource = listaMode === "team" ? teamProspects : data;
@@ -1667,7 +1675,7 @@ function Statistiche({ data, dlProspects }) {
   const [linePhase, setLinePhase] = useState("CONOSCITIVA");
   const [barCiclo,  setBarCiclo]  = useState("ALL");
 
-  const activeData = statsMode === "team" ? [...data, ...(dlProspects||[])] : data;
+  const activeData = (statsMode === "team" ? [...data, ...(dlProspects||[])] : data).filter(isProspectAttivo);
 
   const cicliPresenti=[...new Set(activeData.flatMap(p=>(p.storico||[]).map(s=>cicloOfDate(s.data)).filter(Boolean)))].sort((a,b)=>a-b);
   const cicli=cicliPresenti.length?cicliPresenti:[CICLO_CORRENTE];
