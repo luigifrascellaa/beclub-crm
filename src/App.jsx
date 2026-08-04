@@ -1234,6 +1234,30 @@ export default function App() {
   const cdForzaChiusura = cdChiusi.length?Math.round(cdSub.length/cdChiusi.length*100):0;
   const totSub  = dashData.filter(p=>p.fase==="SUB").length;
   const totConv = dashData.length?Math.round(totSub/dashData.length*100):0;
+
+  // Squadra (sinistra/destra) rispetto a ME — stessa identica logica di getTeamForMe in Team.jsx,
+  // cammina sulla catena positioned_under finché non trova la posizione assegnata sotto il mio id.
+  function getTeamForMe(member) {
+    const pos = positions.find(p => p.member_id===member.id && p.upline_id===auth.userId);
+    if (pos) return pos.team;
+    const parent = downline.find(m => m.id===member.positioned_under);
+    if (parent) return getTeamForMe(parent);
+    return null;
+  }
+  const sinistraAttiva = downlineAttiva.filter(m => getTeamForMe(m)==="sinistra");
+  const destraAttiva   = downlineAttiva.filter(m => getTeamForMe(m)==="destra");
+  function statsSquadra(membri) {
+    const ids = new Set(membri.map(m=>m.id));
+    const arr = cd.filter(p => p._userId && ids.has(p._userId)); // solo prospect del team, già nel ciclo/attivi/non-rimborso
+    const sub = arr.filter(p=>p.fase==="SUB");
+    const act = arr.filter(p=>["CONOSCITIVA","FUP1","FUP2","PACK","CLOSING"].includes(p.fase));
+    return {
+      membri: membri.length, total: arr.length, act: act.length, sub: sub.length,
+      conv: arr.length?Math.round(sub.length/arr.length*100):0,
+      bv: sub.reduce((acc,p)=>acc+bvOfPacchetto(p.pacchetto,p.bvCustom),0),
+    };
+  }
+  const squadre = dashMode==="team" ? { sinistra: statsSquadra(sinistraAttiva), destra: statsSquadra(destraAttiva) } : null;
   const urgenti = data.filter(p=>(isOver(p.followUp)||isToday(p.followUp))&&p.fase!=="NON_INT"&&p.fase!=="NON_PIACE"&&p.fase!=="DA_RIFISSARE"&&p.fase!=="RIMBORSO");
   const funnelCounts=FASI_DASH.map(f=>({f,n:cd.filter(p=>p.fase===f).length}));
   const funnelMax=Math.max(cd.length,1);
@@ -1333,7 +1357,7 @@ export default function App() {
           <ClienteView auth={auth} onUpdateProfile={updateProfile} allProfiles={allProfiles} positions={positions} />
         ) : (
           <>
-            {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} cdChiusi={cdChiusi} cdForzaChiusura={cdForzaChiusura} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} />}
+            {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} cdChiusi={cdChiusi} cdForzaChiusura={cdForzaChiusura} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} squadre={squadre} />}
             {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale")setFMembro("");}} hasTeam={dlProspects.length>0} />}
             {view==="stats"   && <Statistiche data={data} dlProspects={dlProspectsAttivi} />}
             {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} onToggleMarketer={toggleMarketerUnlocked} onSetStatoMembro={setStatoMembro} onRimborsaMembro={rimborsaMembro} />}
@@ -1535,7 +1559,7 @@ function CicloCountdown({ ciclo }) {
   );
 }
 
-function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, cdChiusi, cdForzaChiusura, totSub, totConv, totAll, funnelCounts, funnelMax, urgenti, dashCiclo, setDashCiclo, onOpen, dashMode, setDashMode, hasTeam, ticketVenduti, mentoreInsights }) {
+function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, cdChiusi, cdForzaChiusura, totSub, totConv, totAll, funnelCounts, funnelMax, urgenti, dashCiclo, setDashCiclo, onOpen, dashMode, setDashMode, hasTeam, ticketVenduti, mentoreInsights, squadre }) {
   const cc = v => v>=20?"#10b981":v>=10?"var(--a2)":"#f59e0b";
   const bvCiclo = cdSub.reduce((acc,p)=>acc+bvOfPacchetto(p.pacchetto,p.bvCustom),0);
   const kpis = [
@@ -1592,6 +1616,26 @@ function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, cdChiusi, cdForzaChiusura,
           </div>
         ))}
       </div>
+      {dashMode==="team" && squadre && (squadre.sinistra.membri>0||squadre.destra.membri>0) && (
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+          {[{team:"sinistra",stats:squadre.sinistra,color:"var(--a1)"},{team:"destra",stats:squadre.destra,color:"#10b981"}].map(({team,stats,color})=>(
+            <div key={team} style={{background:"var(--bg2)",border:"1px solid "+color+"28",borderRadius:14,padding:"1.2rem"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                <span style={{fontSize:13,fontWeight:900,color,textTransform:"capitalize"}}>Squadra {team}</span>
+                <span style={{fontSize:11,color:"var(--muted)"}}>{stats.membri} membri</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
+                {[{l:"In percorso",v:stats.act},{l:"Iscritti",v:stats.sub},{l:"Conv%",v:stats.conv+"%"},{l:"BV",v:stats.bv}].map(({l,v})=>(
+                  <div key={l} style={{background:"var(--bg3)",borderRadius:9,padding:"10px"}}>
+                    <div style={{fontSize:10,color:"var(--muted)",marginBottom:4}}>{l}</div>
+                    <div style={{fontSize:20,fontWeight:900,color}}>{v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{display:"grid",gridTemplateColumns:(urgenti.length>0||cdFU.length>0)?"1.5fr 1fr":"1fr",gap:14}}>
         <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,padding:"1.4rem"}}>
           <div style={{fontSize:10,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:1.2,marginBottom:4}}>Funnel — Ciclo {dashCiclo}</div>
