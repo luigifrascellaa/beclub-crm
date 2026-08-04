@@ -752,6 +752,7 @@ export default function App() {
   const [fInteresse, setFInteresse] = useState("");
   const [fPercorso, setFPercorso] = useState(""); // "" | "in_percorso" | "non_in_percorso"
   const [fMembro, setFMembro]     = useState(""); // "" | userId
+  const [fSquadra, setFSquadra]   = useState(""); // "" | "sinistra" | "destra"
   const [sortBy, setSortBy]       = useState("fase"); // "fase"|"data"|"alfa"|"followup"
   const [ready, setReady]         = useState(false);
   const [saving, setSaving]       = useState(false);
@@ -1273,6 +1274,11 @@ export default function App() {
   const tuttiProspectMentore = [...data.map(p => ({ ...p, _userId: auth?.userId })), ...teamProspects].filter(isProspectAttivo);
   const mentoreInsights = auth ? computeMentoreInsights(tuttiProspectMentore, downlineAttiva, cicloRangeCorrente, allProfiles, auth.userId) : null;
 
+  function squadraOf(p) {
+    if (!p._userId) return null; // prospect personale, non ha una squadra
+    const m = downline.find(x => x.id === p._userId);
+    return m ? getTeamForMe(m) : null;
+  }
   const listaSource = listaMode === "team" ? teamProspects : data;
   const listaData=listaSource.filter(p=>{
     const q=search.toLowerCase();
@@ -1282,7 +1288,8 @@ export default function App() {
       &&(!fCitta||( p.citta||"").toLowerCase().includes(fCitta.toLowerCase()))
       &&(!fInteresse||p.interesse===fInteresse)
       &&(!fPercorso||(fPercorso==="in_percorso"?FASI_FUNNEL.includes(p.fase):FASI_SPECIALI.includes(p.fase)))
-      &&(!fMembro||p._userId===fMembro||(!p._userId&&fMembro===auth.userId));
+      &&(!fMembro||p._userId===fMembro||(!p._userId&&fMembro===auth.userId))
+      &&(!fSquadra||squadraOf(p)===fSquadra);
   });
 
   const FASI_ORDER_ALL = [...FASI_FUNNEL, ...FASI_SPECIALI];
@@ -1358,7 +1365,7 @@ export default function App() {
         ) : (
           <>
             {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} cdChiusi={cdChiusi} cdForzaChiusura={cdForzaChiusura} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} squadre={squadre} />}
-            {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale")setFMembro("");}} hasTeam={dlProspects.length>0} />}
+            {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} fSquadra={fSquadra} setFSquadra={setFSquadra} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale"){setFMembro("");setFSquadra("");}}} hasTeam={dlProspects.length>0} />}
             {view==="stats"   && <Statistiche data={data} dlProspects={dlProspectsAttivi} />}
             {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} onToggleMarketer={toggleMarketerUnlocked} onSetStatoMembro={setStatoMembro} onRimborsaMembro={rimborsaMembro} />}
             {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} />}
@@ -1885,7 +1892,7 @@ function ChatCounterButton() {
 }
 // ─────────────────────────────────────────────────────────────────
 
-function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, setFFonte, fCiclo, setFCiclo, fCitta, setFCitta, fInteresse, setFInteresse, fPercorso, setFPercorso, fMembro, setFMembro, sortBy, setSortBy, downline, auth, onOpen, onAdd, listaMode, setListaMode, hasTeam }) {
+function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, setFFonte, fCiclo, setFCiclo, fCitta, setFCitta, fInteresse, setFInteresse, fPercorso, setFPercorso, fMembro, setFMembro, fSquadra, setFSquadra, sortBy, setSortBy, downline, auth, onOpen, onAdd, listaMode, setListaMode, hasTeam }) {
   return (
     <div style={{padding:"2rem 2.2rem",maxWidth:1280,margin:"0 auto"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.4rem",flexWrap:"wrap",gap:12}}>
@@ -1933,6 +1940,13 @@ function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, s
           <option value="in_percorso">In percorso</option>
           <option value="non_in_percorso">Non in percorso</option>
         </select>
+        {listaMode==="team" && (
+          <select value={fSquadra} onChange={e=>setFSquadra(e.target.value)} style={{flex:1,minWidth:140}}>
+            <option value="">Tutte le squadre</option>
+            <option value="sinistra">Squadra sinistra</option>
+            <option value="destra">Squadra destra</option>
+          </select>
+        )}
         {listaMode==="team" && (
           <select value={fMembro} onChange={e=>setFMembro(e.target.value)} style={{flex:1,minWidth:150}}>
             <option value="">Tutti i membri</option>
