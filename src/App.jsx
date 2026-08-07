@@ -210,6 +210,36 @@ function buildStorico(prospect, fase, dateForFase) {
   }
   return storico.sort((a,b)=>FASI_FUNNEL.indexOf(a.fase)-FASI_FUNNEL.indexOf(b.fase));
 }
+// Riempie i buchi nello storico: se una fase è presente, tutte quelle prima nel funnel
+// sono implicitamente state fatte (si procede sempre in ordine). Alle fasi mancanti si assegna
+// la data della fase successiva già presente — NON conosciutoAt — così restano attribuite al
+// ciclo giusto: se conosciutoAt è in un ciclo vecchio, datare lì una FUP1 mancante la
+// conterebbe nel ciclo sbagliato e sballerebbe i numeri.
+// Ritorna un array nuovo se ha cambiato qualcosa, altrimenti null (per evitare scritture inutili).
+function fillGapsStorico(p) {
+  const storico = [...(p.storico||[])];
+  if (!storico.length) return null;
+  let maxIdx = -1;
+  storico.forEach(s=>{ const i=FASI_FUNNEL.indexOf(s.fase); if (i>maxIdx) maxIdx=i; });
+  if (maxIdx < 0) return null;
+  const mancanti = [];
+  for (let i=0;i<=maxIdx;i++) {
+    const f = FASI_FUNNEL[i];
+    if (!storico.some(s=>s.fase===f)) mancanti.push({fase:f, idx:i});
+  }
+  if (!mancanti.length) return null;
+  mancanti.forEach(({fase, idx})=>{
+    // data della prima fase successiva presente
+    let data = null;
+    for (let j=idx+1;j<=maxIdx;j++) {
+      const succ = storico.find(s=>s.fase===FASI_FUNNEL[j]);
+      if (succ) { data = succ.data; break; }
+    }
+    storico.push({fase, data: data || p.conosciutoAt});
+  });
+  return storico.sort((a,b)=>FASI_FUNNEL.indexOf(a.fase)-FASI_FUNNEL.indexOf(b.fase));
+}
+
 function reachedInCiclo(p,fase,c) {
   const storico = p.storico||[];
   const e = storico.find(s=>s.fase===fase);
@@ -795,12 +825,30 @@ export default function App() {
     if (!auth) { setData([]); setReady(true); return; }
     setReady(false);
     sbList(auth.token, auth.userId).then(rows=>{
+      // La migrazione dei buchi gira UNA VOLTA SOLA per utente (flag profiles.storico_migrato).
+      // Se girasse a ogni login, una fase cancellata a mano verrebbe ripristinata al ricaricamento
+      // e diventerebbe impossibile toglierla.
+      const daMigrare = auth.profile && auth.profile.storico_migrato !== true;
+      const daSalvare=[];
       const arr=(rows||[]).map(r=>{
         const p=toApp(r);
         if (!p.storico.length) p.storico=buildStorico(p,p.fase,p.conosciutoAt);
+        else if (daMigrare) {
+          // Prospect creati prima del backfill automatico possono avere buchi (es. FUP2 senza
+          // FUP1) che falsano i conteggi per fase/ciclo: corretti qui e riscritti sul DB.
+          const fixed=fillGapsStorico(p);
+          if (fixed) { p.storico=fixed; daSalvare.push(p); }
+        }
         return p;
       });
       setData(arr);
+      if (daMigrare) {
+        // Salvataggio in background: se fallisce si riprova al prossimo login (flag non impostato).
+        Promise.all(daSalvare.map(p=>sbUpdate(auth.token,p.id,toDB(p,auth.userId))))
+          .then(()=>sbUpdateProfile(auth.token, auth.userId, { storico_migrato:true }))
+          .then(()=>setAuth(a=>a?{...a, profile:{...a.profile, storico_migrato:true}}:a))
+          .catch(()=>{});
+      }
     }).catch(e=>showToast("Errore: "+e.message,"#ef4444")).finally(()=>setReady(true));
 
     // Load downline ricorsiva + posizioni
@@ -834,7 +882,19 @@ export default function App() {
       if (mine.length > 0) {
         const uids = mine.map(p => p.id);
         const dp = await sbGetDownlineProspects(auth.token, uids);
-        setDlProspects((dp||[]).map(r=>({...toApp(r), _userId:r.user_id})));
+        // Stessa correzione dei buchi sui prospect della downline, ma SOLO in memoria e SOLO per
+        // i membri che non hanno ancora migrato: scrivere in massa su record di altri utenti
+        // sarebbe una scrittura cross-user rischiosa, e per chi ha già migrato un buco residuo
+        // è una cancellazione voluta, che va rispettata anche nella vista del leader.
+        const nonMigrati = new Set(mine.filter(m=>m.storico_migrato!==true).map(m=>m.id));
+        setDlProspects((dp||[]).map(r=>{
+          const p={...toApp(r), _userId:r.user_id};
+          if (nonMigrati.has(r.user_id)) {
+            const fixed=fillGapsStorico(p);
+            if (fixed) p.storico=fixed;
+          }
+          return p;
+        }));
       }
     }).catch(()=>{});
   },[auth]);
@@ -2236,12 +2296,15 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, o
                     if(p.storico?.some(s=>s.fase===stepPopup)){
                       onUpdateStoricoData(stepPopup,stepDate);
                     } else {
-                      // Aggiungi la fase allo storico e aggiorna la fase se necessaria
+                      // Aggiungi la fase allo storico e aggiorna la fase se necessaria.
+                      // Le fasi precedenti mancanti vengono aggiunte automaticamente (fillGapsStorico):
+                      // se segni FUP2, vuol dire che Invito/Conoscitiva/FUP1 sono già state fatte.
                       const FASI_ORDER=["INVITO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
                       const currentIdx=FASI_ORDER.indexOf(p.fase);
                       const newIdx=FASI_ORDER.indexOf(stepPopup);
                       const newFase=newIdx>currentIdx?stepPopup:p.fase;
-                      const newStorico=[...(p.storico||[]).filter(s=>s.fase!==stepPopup),{fase:stepPopup,data:stepDate}];
+                      const conStep=[...(p.storico||[]).filter(s=>s.fase!==stepPopup),{fase:stepPopup,data:stepDate}];
+                      const newStorico=fillGapsStorico({...p,storico:conStep})||conStep.sort((a,b)=>FASI_FUNNEL.indexOf(a.fase)-FASI_FUNNEL.indexOf(b.fase));
                       onUpdateStoricoData(stepPopup,stepDate,newFase,newStorico);
                     }
                     setStepPopup(null);
