@@ -23,7 +23,7 @@ function progressPercent(p) {
 }
 
 // ===== card persona (in ballo o venduto) =====
-function PersonaCard({ p, ownerName, showOwner, onClick, onMarkSold }) {
+function PersonaCard({ p, ownerName, showOwner, onClick, onMarkSold, squadraLabel }) {
   const showProgress = p.stato === "venduto";
   const pct = showProgress ? progressPercent(p) : 0;
   const barColor = pct >= 100 ? "#10b981" : pct >= 50 ? "#f59e0b" : "#ef4444";
@@ -46,6 +46,11 @@ function PersonaCard({ p, ownerName, showOwner, onClick, onMarkSold }) {
             style={{ padding: "5px 11px", fontSize: 11, fontWeight: 800, background: "#10b98118", color: "#10b981", border: "1px solid #10b98140", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
             Venduto
           </button>
+        )}
+        {squadraLabel && (
+          <div style={{ fontSize: 10, fontWeight: 800, color: squadraLabel === "sinistra" ? "var(--a2)" : "#10b981", background: squadraLabel === "sinistra" ? "var(--a1-13)" : "#10b98118", border: "1px solid " + (squadraLabel === "sinistra" ? "var(--a1-25)" : "#10b98130"), borderRadius: 7, padding: "3px 8px", whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: .4 }}>
+            {squadraLabel === "sinistra" ? "Sx" : "Dx"}
+          </div>
         )}
         {showOwner && ownerName && (
           <div style={{ fontSize: 10, fontWeight: 700, color: "var(--a2)", background: "var(--a1-13)", borderRadius: 7, padding: "3px 8px", whiteSpace: "nowrap" }}>
@@ -98,6 +103,19 @@ function PersonaModal({ persona, defaultStato, onSave, onClose, onDelete, auth, 
             <option value="prospect">Prospect</option>
           </select>
         </div>
+        {(form.categoria || "team") === "team" && (
+          <div style={{ gridColumn: "1/-1" }}>
+            <label style={lbl}>Squadra</label>
+            <select value={form.squadra_manuale || ""} onChange={e => setForm(f => ({ ...f, squadra_manuale: e.target.value }))}>
+              <option value="">Non specificata</option>
+              <option value="sinistra">Sinistra</option>
+              <option value="destra">Destra</option>
+            </select>
+            <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 5, lineHeight: 1.4 }}>
+              Serve solo per i membri del team gia' presenti in struttura: indica in quale delle tue due gambe far rientrare il ticket nelle numeriche Sinistra/Destra. Se il ticket e' registrato da un altro membro, la squadra viene calcolata dall'albero e questo campo viene ignorato.
+            </div>
+          </div>
+        )}
         <div><label style={lbl}>Nome</label><input value={form.nome || ""} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Mario" /></div>
         <div><label style={lbl}>Cognome</label><input value={form.cognome || ""} onChange={e => setForm(f => ({ ...f, cognome: e.target.value }))} placeholder="Rossi" /></div>
         <div style={{ gridColumn: "1/-1" }}><label style={lbl}>Citta</label><input value={form.citta || ""} onChange={e => setForm(f => ({ ...f, citta: e.target.value }))} placeholder="Milano" /></div>
@@ -264,11 +282,19 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
     [persone, myTeamIds, filtroVenduti, filtroMembro]
   );
 
-  // squadra (sinistra/destra) di ogni membro rispetto a chi guarda la pagina
+  // squadra (sinistra/destra) di ogni TICKET rispetto a chi guarda la pagina.
+  // Indicizzato per p.id (non per user_id): la squadra manuale e' per singolo record,
+  // quindi due ticket dello stesso proprietario possono cadere in gambe diverse.
+  // Regola: l'albero ha sempre la precedenza; il valore manuale entra in gioco solo
+  // quando l'albero non sa rispondere E il record e' del proprio utente (i ticket
+  // registrati da un membro della downline cadono gia' nella gamba di quel membro).
   const squadraOf = useMemo(() => {
     const cache = {};
     const map = {};
-    venduti.forEach(p => { map[p.user_id] = getSquadraRelativeTo(auth.userId, p.user_id, allProfiles, positions, cache); });
+    venduti.forEach(p => {
+      const daAlbero = getSquadraRelativeTo(auth.userId, p.user_id, allProfiles, positions, cache);
+      map[p.id] = daAlbero || (p.user_id === auth.userId ? (p.squadra_manuale || null) : null);
+    });
     return map;
   }, [allProfiles, positions, auth.userId, venduti]);
 
@@ -302,13 +328,13 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
     });
   }, [membriBreakdown, cercaMembro, soloLeader]);
 
-  const vendutiSinistra = useMemo(() => venduti.filter(p => squadraOf[p.user_id] === "sinistra"), [venduti, squadraOf]);
-  const vendutiDestra    = useMemo(() => venduti.filter(p => squadraOf[p.user_id] === "destra"), [venduti, squadraOf]);
+  const vendutiSinistra = useMemo(() => venduti.filter(p => squadraOf[p.id] === "sinistra"), [venduti, squadraOf]);
+  const vendutiDestra    = useMemo(() => venduti.filter(p => squadraOf[p.id] === "destra"), [venduti, squadraOf]);
 
   // lista finale mostrata sotto le card Sinistra/Destra: filtrata per squadra (se scelta) e ordinata per % completamento crescente
   const vendutiVisibili = useMemo(() =>
     venduti
-      .filter(p => !filtroSquadra || squadraOf[p.user_id] === filtroSquadra)
+      .filter(p => !filtroSquadra || squadraOf[p.id] === filtroSquadra)
       .sort((a, b) => progressPercent(a) - progressPercent(b)),
     [venduti, squadraOf, filtroSquadra]
   );
@@ -384,19 +410,25 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   );
 
   async function salvaPersona(form) {
+    // la squadra manuale ha senso solo per la categoria "team": se il record torna
+    // "prospect" il campo va azzerato, altrimenti resta un valore fantasma che
+    // continuerebbe a spostare il ticket in una gamba
+    const categoria = form.categoria || "team";
+    const squadraManuale = categoria === "team" ? (form.squadra_manuale || null) : null;
     try {
       if (form.id) {
         await sbUpdateEventoPersona(auth.token, form.id, {
           nome: form.nome, cognome: form.cognome || null, telefono: form.telefono || null,
           instagram: form.instagram || null, citta: form.citta || null, note: form.note || null,
-          categoria: form.categoria || "team", sponsor: form.sponsor || null,
+          categoria, sponsor: form.sponsor || null, squadra_manuale: squadraManuale,
           acconto: !!form.acconto, hotel: !!form.hotel, saldo: !!form.saldo,
           stato: form.stato, venduto_at: form.stato === "venduto" ? new Date().toISOString() : null,
         });
-        setPersone(ps => ps.map(p => p.id === form.id ? { ...p, ...form } : p));
+        const aggiornata = { ...form, categoria, squadra_manuale: squadraManuale };
+        setPersone(ps => ps.map(p => p.id === form.id ? { ...p, ...aggiornata } : p));
         setTuttiVenduti(tv => {
           const senzaQuesta = tv.filter(p => p.id !== form.id);
-          return form.stato === "venduto" ? [...senzaQuesta, { ...form }] : senzaQuesta;
+          return form.stato === "venduto" ? [...senzaQuesta, { ...aggiornata }] : senzaQuesta;
         });
         showToast(form.stato === "venduto" ? "Segnato come venduto" : "Aggiornato");
       } else {
@@ -405,7 +437,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
           evento_id: eventoAttivo, user_id: assignTo,
           nome: form.nome, cognome: form.cognome || null, telefono: form.telefono || null,
           instagram: form.instagram || null, citta: form.citta || null, note: form.note || null,
-          categoria: form.categoria || "team", sponsor: form.sponsor || null,
+          categoria, sponsor: form.sponsor || null, squadra_manuale: squadraManuale,
           acconto: !!form.acconto, hotel: !!form.hotel, saldo: !!form.saldo,
           stato: form.stato || "in_ballo",
         });
@@ -549,7 +581,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
                 <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 420, overflowY: "auto" }}>
                   {vendutiVisibili.length === 0
                     ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>Nessun ticket venduto ancora</div>
-                    : vendutiVisibili.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner onClick={() => canEdit(p) && setModal({ persona: p })} />)
+                    : vendutiVisibili.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner squadraLabel={squadraOf[p.id]} onClick={() => canEdit(p) && setModal({ persona: p })} />)
                   }
                 </div>
               </div>
