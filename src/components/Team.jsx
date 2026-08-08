@@ -18,6 +18,24 @@ function bvOfPacchetto(key, bvCustom){
 const CICLI=[[73,"2026-01-03","2026-01-31"],[74,"2026-01-31","2026-02-28"],[75,"2026-02-28","2026-03-28"],[76,"2026-03-28","2026-04-25"],[77,"2026-04-25","2026-05-23"],[78,"2026-05-23","2026-06-20"],[79,"2026-06-20","2026-07-18"],[80,"2026-07-18","2026-08-15"],[81,"2026-08-15","2026-09-12"],[82,"2026-09-12","2026-10-10"],[83,"2026-10-10","2026-11-07"],[84,"2026-11-07","2026-12-05"],[85,"2026-12-05","2027-01-02"]];
 const CICLO_CORRENTE=(()=>{const t=new Date().toISOString().split("T")[0];for(const[c,s,e]of CICLI)if(t>=s&&t<e)return c;return CICLI[CICLI.length-1][0];})();
 const CICLO_NUMS=CICLI.map(r=>r[0]).sort((a,b)=>b-a);
+
+// ─────────────────────────────────────────────────────────────
+// Account che possono nominare/revocare i leader, e che sono leader in modo
+// permanente (il loro toggle e' bloccato: nessuno puo' declassarli per sbaglio).
+// ATTENZIONE: questi id NON vanno confusi con LUDOVICO_ID di App.jsx, che e' il
+// root strutturale dell'albero usato per la leaderboard globale. Qui si parla di
+// PERMESSI, non di posizione nell'albero: sono due concetti separati e vanno
+// tenuti separati anche se un id dovesse coincidere. Se un giorno cambia il root
+// dell'albero, questa lista non deve cambiare da sola.
+const ADMIN_LEADER_IDS = [
+  "720d0d85-b356-46e7-8b27-0e33eeea9ae5", // Dimitri Rista
+  "6a24d654-bfb2-40c7-86b1-80fe6142e86b", // Ludovico Tommasi
+  "775ea212-a679-45ec-bb86-7199a6dae860", // Lorenzo Curiel
+  "aa63a20f-7e6b-47a9-aaba-88112a074b2d", // Giovanni Indrio
+  "5590b29a-69db-4d60-bfde-eea9621e4c69", // Riccardo Dal Zilio
+];
+const isAdminLeader = id => !!id && ADMIN_LEADER_IDS.includes(id);
+// ─────────────────────────────────────────────────────────────
 function cicloOfDate(d){if(!d)return null;for(const[c,s,e]of CICLI)if(d>=s&&d<e)return c;return null;}
 function cicloLabel(c){const r=CICLI.find(x=>x[0]===Number(c));if(!r)return"Ciclo "+c;const fd=s=>new Date(s+"T12:00:00").toLocaleDateString("it-IT",{day:"numeric",month:"short"});return fd(r[1])+" \u2013 "+fd(r[2]);}
 function dataByCiclo(arr,c){const r=CICLI.find(x=>x[0]===Number(c));if(!r)return[];return arr.filter(p=>p.conosciutoAt&&p.conosciutoAt>=r[1]&&p.conosciutoAt<r[2]);}
@@ -841,7 +859,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
             {downline.length===0
               ?<div style={{padding:"3rem",textAlign:"center",color:"var(--border2)"}}><div style={{fontSize:36,marginBottom:12}}>{"\u25c8"}</div><p style={{fontSize:14,marginBottom:8}}>Nessun membro ancora</p><p style={{fontSize:12,color:"var(--border2)"}}>Condividi il tuo link referral</p></div>
               :<table style={{width:"100%",borderCollapse:"collapse"}}>
-                <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Membro","Squadra","Prospect","Iscritti","Conv%","BV",...(auth.userId==="720d0d85-b356-46e7-8b27-0e33eeea9ae5"?["Leader"]:[]),...(auth?.profile?.is_leader?["Marketer"]:[]),"Stato","Azione",""].map(h=>(<th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
+                <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Membro","Squadra","Prospect","Iscritti","Conv%","BV",...(isAdminLeader(auth.userId)?["Leader"]:[]),...(auth?.profile?.is_leader?["Marketer"]:[]),"Stato","Azione",""].map(h=>(<th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
                 <tbody>{filteredMembers.map(m=>{
                   const mP=getMemberProspects(m.id);
                   const ms=teamStats(mP);
@@ -868,12 +886,17 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
                       <td style={{padding:"12px 16px",fontWeight:700,color:"#10b981",fontSize:13}}>{ms.sub}</td>
                       <td style={{padding:"12px 16px",fontWeight:800,fontSize:13,color:convColor(ms.conv)}}>{ms.conv}%</td>
                       <td style={{padding:"12px 16px",fontWeight:800,fontSize:13,color:"#f59e0b"}}>{ms.bv}</td>
-                      {auth.userId==="720d0d85-b356-46e7-8b27-0e33eeea9ae5" && (
+                      {isAdminLeader(auth.userId) && (
                         <td style={{padding:"12px 16px"}}>
-                          <button onClick={()=>onToggleLeader(m.id,!m.is_leader)}
-                            style={{padding:"5px 11px",borderRadius:8,border:"1px solid "+(m.is_leader?"#a855f760":"var(--border2)"),cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",background:m.is_leader?"#a855f720":"var(--bg3)",color:m.is_leader?"#c084fc":"var(--muted)"}}>
-                            {m.is_leader?" Leader":"Rendi leader"}
-                          </button>
+                          {isAdminLeader(m.id)
+                            ? <div title="Leader permanente, non revocabile dall interfaccia"
+                                style={{display:"inline-block",padding:"5px 11px",borderRadius:8,border:"1px solid #a855f760",fontSize:11,fontWeight:700,background:"#a855f720",color:"#c084fc",cursor:"default"}}>
+                                Leader fisso
+                              </div>
+                            : <button onClick={()=>onToggleLeader(m.id,!m.is_leader)}
+                                style={{padding:"5px 11px",borderRadius:8,border:"1px solid "+(m.is_leader?"#a855f760":"var(--border2)"),cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",background:m.is_leader?"#a855f720":"var(--bg3)",color:m.is_leader?"#c084fc":"var(--muted)"}}>
+                                {m.is_leader?" Leader":"Rendi leader"}
+                              </button>}
                         </td>
                       )}
                       {auth?.profile?.is_leader && (
