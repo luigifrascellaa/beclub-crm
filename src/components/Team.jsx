@@ -33,6 +33,7 @@ const ADMIN_LEADER_IDS = [
   "775ea212-a679-45ec-bb86-7199a6dae860", // Lorenzo Curiel
   "aa63a20f-7e6b-47a9-aaba-88112a074b2d", // Giovanni Indrio
   "5590b29a-69db-4d60-bfde-eea9621e4c69", // Riccardo Dal Zilio
+  "f3663d9a-4096-4357-beac-4f2d3cb13a34", // Omar Bouzriba
 ];
 const isAdminLeader = id => !!id && ADMIN_LEADER_IDS.includes(id);
 // ─────────────────────────────────────────────────────────────
