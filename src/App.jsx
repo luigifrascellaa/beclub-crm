@@ -1237,7 +1237,7 @@ export default function App() {
           <>
             {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} cdChiusi={cdChiusi} cdForzaChiusura={cdForzaChiusura} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} squadre={squadre} />}
             {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} fSquadra={fSquadra} setFSquadra={setFSquadra} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale"){setFMembro("");setFSquadra("");}}} hasTeam={dlProspects.length>0} />}
-            {view==="stats"   && <Statistiche data={data} dlProspects={dlProspectsAttivi} />}
+            {view==="stats"   && <Statistiche data={data} dlProspects={dlProspectsAttivi} auth={auth} allProfiles={allProfiles} positions={positions} />}
             {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} onToggleMarketer={toggleMarketerUnlocked} onSetStatoMembro={setStatoMembro} onRimborsaMembro={rimborsaMembro} />}
             {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} />}
             {view==="eventi"  && <EventiView auth={auth} allProfiles={allProfiles} downline={downline} positions={positions} showToast={showToast}
@@ -1389,13 +1389,46 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
 }
 
 //  DASHBOARD 
-function Statistiche({ data, dlProspects }) {
+// Calcola sinistra/destra di memberId rispetto a un rootId qualsiasi.
+// Copiata identica da Eventi.jsx / Cliente.jsx: la logica dell'albero e' gia'
+// duplicata in quei due file, non la centralizzo qui per non toccare 3 file.
+function getSquadraRelativeTo(rootId, memberId, allProfiles, positions, cache) {
+  if (memberId === rootId) return null;
+  if (cache[memberId] !== undefined) return cache[memberId];
+  const pos = (positions || []).find(p => p.member_id === memberId && p.upline_id === rootId);
+  if (pos) { cache[memberId] = pos.team; return pos.team; }
+  const member = (allProfiles || []).find(p => p.id === memberId);
+  const parent = member ? (allProfiles || []).find(p => p.id === member.positioned_under) : null;
+  const result = parent && parent.id !== memberId ? getSquadraRelativeTo(rootId, parent.id, allProfiles, positions, cache) : null;
+  cache[memberId] = result;
+  return result;
+}
+
+function Statistiche({ data, dlProspects, auth, allProfiles, positions }) {
   const hasTeam = (dlProspects||[]).length > 0;
   const [statsMode, setStatsMode] = useState(data.length > 0 ? "personale" : (hasTeam ? "team" : "personale"));
   const [linePhase, setLinePhase] = useState("CONOSCITIVA");
   const [barCiclo,  setBarCiclo]  = useState("ALL");
+  const [squadra,   setSquadra]   = useState("");
 
-  const activeData = (statsMode === "team" ? [...data, ...(dlProspects||[])] : data).filter(isProspectAttivo);
+  // Il filtro squadra vive solo in modalita' Team: in Personale i prospect sono
+  // tutti tuoi e tu non stai in nessuna delle tue due gambe (getSquadraRelativeTo
+  // ritorna null sul root), quindi filtrerebbe sempre a zero.
+  const squadraAttiva = statsMode === "team" ? squadra : "";
+  // cache di risalita dell'albero, valida per un singolo render
+  const squadraCache = {};
+
+  // La squadra di un prospect e' quella del suo proprietario (_userId), risalita
+  // sull'albero rispetto a chi sta guardando. I prospect personali (che in team
+  // mode arrivano da `data` e non hanno _userId) restano fuori quando si filtra:
+  // non appartengono ne' alla gamba sinistra ne' alla destra.
+  const activeData = (statsMode === "team" ? [...data, ...(dlProspects||[])] : data)
+    .filter(isProspectAttivo)
+    .filter(p => {
+      if (!squadraAttiva) return true;
+      if (!p._userId) return false;
+      return getSquadraRelativeTo(auth?.userId, p._userId, allProfiles, positions, squadraCache) === squadraAttiva;
+    });
 
   const cicliPresenti=[...new Set(activeData.flatMap(p=>(p.storico||[]).map(s=>cicloOfDate(s.data)).filter(Boolean)))].sort((a,b)=>a-b);
   const cicli=cicliPresenti.length?cicliPresenti:[CICLO_CORRENTE];
@@ -1404,7 +1437,10 @@ function Statistiche({ data, dlProspects }) {
   const tableRows=[...cicli].sort((a,b)=>b-a).map(c=>{const r={c};FASI_FUNNEL.forEach(f=>{r[f]=activeData.filter(p=>reachedInCiclo(p,f,c)).length;});r.conv=r.INVITO>0?Math.round(r.SUB/r.INVITO*100):r.FUP1>0?Math.round(r.SUB/r.FUP1*100):0;return r;});
   const ts={background:"var(--bg3)",border:"1px solid var(--border2)",borderRadius:8,color:"var(--text)",fontSize:12};
   const tProps={contentStyle:ts,itemStyle:{color:"var(--text)"},labelStyle:{color:"var(--text)",fontWeight:700}};
-  if (!activeData.length) return <div style={{padding:"2rem 2.2rem"}}><h1 style={{fontWeight:900,fontSize:26,color:"var(--text)",marginBottom:8}}>Statistiche</h1><div style={{textAlign:"center",padding:"5rem",color:"var(--border2)"}}><div style={{fontSize:44,marginBottom:12}}></div><p>{hasTeam ? "Nessun dato in questa modalita — prova a switchare su Team" : "Aggiungi prospect per vedere le statistiche"}</p></div></div>;
+  // Se e' il filtro squadra a svuotare i dati serve un modo per toglierlo:
+  // senza il bottone di reset il return anticipato nasconde anche le tendine
+  // e l'utente resta bloccato su una pagina vuota.
+  if (!activeData.length) return <div style={{padding:"2rem 2.2rem"}}><h1 style={{fontWeight:900,fontSize:26,color:"var(--text)",marginBottom:8}}>Statistiche</h1><div style={{textAlign:"center",padding:"5rem",color:"var(--border2)"}}><div style={{fontSize:44,marginBottom:12}}></div><p>{squadraAttiva ? ("Nessun prospect nella squadra " + squadraAttiva) : hasTeam ? "Nessun dato in questa modalita — prova a switchare su Team" : "Aggiungi prospect per vedere le statistiche"}</p>{squadraAttiva && <button onClick={()=>setSquadra("")} style={{marginTop:14,padding:"8px 16px",background:"var(--bg3)",color:"var(--a2)",border:"1px solid var(--border2)",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>Mostra tutte le squadre</button>}</div></div>;
   return (
     <div style={{padding:"2rem 2.2rem",maxWidth:1280,margin:"0 auto"}}>
       <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:24,gap:12,flexWrap:"wrap"}}>
@@ -1426,14 +1462,24 @@ function Statistiche({ data, dlProspects }) {
       <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,padding:"1.4rem",marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
           <div><div style={{fontSize:13,fontWeight:800,color:"var(--text)"}}> Andamento nei cicli</div><div style={{fontSize:11,color:"var(--muted)",marginTop:2}}>Quanti ne fai per ciclo</div></div>
-          <select value={linePhase} onChange={e=>setLinePhase(e.target.value)} style={{width:"auto",minWidth:160}}><option value="ALL">Tutte le fasi</option>{FASI_FUNNEL.map(f=><option key={f} value={f}>{FASE_LABEL[f]}</option>)}</select>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {statsMode==="team" && (
+              <select value={squadra} onChange={e=>setSquadra(e.target.value)} style={{width:"auto",minWidth:150}}><option value="">Tutte le squadre</option><option value="sinistra">Sinistra</option><option value="destra">Destra</option></select>
+            )}
+            <select value={linePhase} onChange={e=>setLinePhase(e.target.value)} style={{width:"auto",minWidth:160}}><option value="ALL">Tutte le fasi</option>{FASI_FUNNEL.map(f=><option key={f} value={f}>{FASE_LABEL[f]}</option>)}</select>
+          </div>
         </div>
         <div style={{height:300}}><ResponsiveContainer width="100%" height="100%"><LineChart data={lineData} margin={{top:5,right:10,left:-15,bottom:5}}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/><XAxis dataKey="ciclo" stroke="var(--muted)" fontSize={12}/><YAxis stroke="var(--muted)" fontSize={12} allowDecimals={false}/><Tooltip {...tProps} cursor={{stroke:"var(--border2)"}}/>{linePhase==="ALL"?FASI_FUNNEL.map(f=><Line key={f} type="monotone" dataKey={f} name={FASE_LABEL[f]} stroke={FASE_CLR[f]} strokeWidth={2} dot={{r:3}}/>):<Line type="monotone" dataKey={linePhase} name={FASE_LABEL[linePhase]} stroke={FASE_CLR[linePhase]} strokeWidth={3} dot={{r:4}} activeDot={{r:6}}/>}{linePhase==="ALL"&&<Legend wrapperStyle={{fontSize:11}}/>}</LineChart></ResponsiveContainer></div>
       </div>
       <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,padding:"1.4rem",marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
           <div><div style={{fontSize:13,fontWeight:800,color:"var(--text)"}}> Conversione del percorso</div></div>
-          <select value={barCiclo} onChange={e=>setBarCiclo(e.target.value)} style={{width:"auto",minWidth:160}}><option value="ALL">Tutti i cicli</option>{[...cicli].sort((a,b)=>b-a).map(c=><option key={c} value={c}>Ciclo {c}</option>)}</select>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {statsMode==="team" && (
+              <select value={squadra} onChange={e=>setSquadra(e.target.value)} style={{width:"auto",minWidth:150}}><option value="">Tutte le squadre</option><option value="sinistra">Sinistra</option><option value="destra">Destra</option></select>
+            )}
+            <select value={barCiclo} onChange={e=>setBarCiclo(e.target.value)} style={{width:"auto",minWidth:160}}><option value="ALL">Tutti i cicli</option>{[...cicli].sort((a,b)=>b-a).map(c=><option key={c} value={c}>Ciclo {c}</option>)}</select>
+          </div>
         </div>
         <div style={{height:300}}><ResponsiveContainer width="100%" height="100%"><BarChart data={barData} margin={{top:5,right:10,left:-15,bottom:5}}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/><XAxis dataKey="fase" stroke="var(--muted)" fontSize={12}/><YAxis stroke="var(--muted)" fontSize={12} allowDecimals={false}/><Tooltip {...tProps} cursor={{fill:"#0d1b3360"}}/><Bar dataKey="count" name="Raggiunti" radius={[6,6,0,0]}>{barData.map((e,i)=><Cell key={i} fill={e.fill}/>)}</Bar></BarChart></ResponsiveContainer></div>
         <div style={{display:"flex",gap:8,marginTop:14,flexWrap:"wrap"}}>{barData.slice(0,-1).map((b,i)=>{const next=barData[i+1];const rate=b.count>0?Math.round(next.count/b.count*100):0;return(<div key={i} style={{flex:"1 1 120px",background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:9,padding:"9px 11px"}}><div style={{fontSize:10,color:"var(--muted)",fontWeight:600}}>{b.fase} → {next.fase}</div><div style={{fontSize:18,fontWeight:900,color:next.fill,marginTop:2}}>{rate}%</div></div>);})}</div>
