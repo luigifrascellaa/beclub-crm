@@ -23,8 +23,11 @@ export function bvOfPacchetto(key, bvCustom) {
   return p?p.bv:0;
 }
 
-export const FASI_FUNNEL   = ["INVITO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
-export const FASI_DASH     = ["CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
+// FISSATO sta tra INVITO e CONOSCITIVA: l'appuntamento si fissa dopo l'invito e
+// prima di farlo. I prospect creati prima di questa fase non hanno FISSATO nello
+// storico e non vanno riempiti a posteriori: la colonna si popola in avanti.
+export const FASI_FUNNEL   = ["INVITO","FISSATO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
+export const FASI_DASH     = ["FISSATO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
 export const FASI_SPECIALI = ["DA_RISENTIRE","DA_RIFISSARE","NON_INT","NON_PIACE","RIMBORSO"];
 export const FASI          = [...FASI_FUNNEL, ...FASI_SPECIALI];
 export const FONTI         = ["Instagram","TikTok","Offline","Referenza","Lista Nomi","Modulo"];
@@ -37,11 +40,53 @@ export const INTERESSE_CLR = { Alto:"#10b981", Medio:"#f59e0b", Basso:"#ef4444" 
 export function isProspectAttivo(p) { return !p || p.fase !== "RIMBORSO"; }
 
 export const FASE_CLR = {
-  INVITO:"#8b5cf6", CONOSCITIVA:"#7c3aed", FUP1:"#2563eb", FUP2:"#3b82f6", PACK:"var(--a2)",
-  CLOSING:"#22d3ee", SUB:"#10b981", DA_RISENTIRE:"#f59e0b", DA_RIFISSARE:"#f97316", NON_INT:"#6b7280", NON_PIACE:"#ec4899", RIMBORSO:"#ef4444",
+  INVITO:"#8b5cf6", FISSATO:"#a855f7", CONOSCITIVA:"#7c3aed", FUP1:"#2563eb", FUP2:"#3b82f6", PACK:"var(--a2)",
+  CLOSING:"#22d3ee", SUB:"#10b981",
+  // Da risentire e Da rifissare erano ambra e arancio: troppo vicini al giallo
+  // dell'Invito nella griglia. Spostati su lilla e indaco, l'unico settore di
+  // tinta ancora libero. NB: niente turchese o verde-azzurro qui — il verde e'
+  // riservato al percorso e al Closing, e un turchese ci finisce dentro.
+  // Restano cosi' distinti anche dal gruppo "chiuso male" (Non int. grigio,
+  // Non mi piace rosa, Rimborso rosso), tutto su toni caldi e neutri.
+  DA_RISENTIRE:"#c084fc", DA_RIFISSARE:"#6366f1", NON_INT:"#6b7280", NON_PIACE:"#ec4899", RIMBORSO:"#ef4444",
 };
+// Colore di sfondo della riga nella griglia prospect, per fase corrente.
+// NON e' FASE_CLR: quelli restano i colori delle caselle e dei grafici, e formano
+// una scala viola->blu->verde che qui non serve. Questa scala risponde a un'altra
+// domanda — "a che punto e' questa persona" — con tre soli stati leggibili di
+// colpo: giallo = da lavorare, verde = in corso, azzurro = chiuso.
+// PACK usa un verde esplicito e non var(--a2) perche' il valore va concatenato
+// con l'alpha in esadecimale, e una CSS variable non si puo' concatenare.
+// Le fasi speciali riusano i colori di FASE_CLR (vedi coloreRiga sotto).
+export const FASE_RIGA_CLR = {
+  INVITO:"#eab308",
+  // I due verdi sono un vincolo di progetto (percorso = verde, Closing = verde piu'
+  // scuro), quindi si separano sulla LUMINOSITA', non sulla tinta: menta chiaro
+  // contro verde bosco. A bassa opacita' la differenza si appiattisce comunque —
+  // e' la barra piena a sinistra della riga a renderla leggibile, per questo e'
+  // spessa 5px e non 3.
+  FISSATO:"#86efac", CONOSCITIVA:"#86efac", FUP1:"#86efac", FUP2:"#86efac", PACK:"#86efac",
+  CLOSING:"#15803d",
+  SUB:"#38bdf8",
+};
+// Opacita' dello sfondo riga e del bordo. Unici due punti da toccare per alzare
+// o abbassare l'intensita': "1c" e' circa 11%, "2b" circa 17%, "3d" circa 24%.
+export const RIGA_ALPHA        = "2b"; // fondo
+export const RIGA_ALPHA_BORDO  = "70"; // bordo, volutamente molto piu' acceso del fondo
+// Colore pieno della riga (fasi funnel dalla scala qui sopra, speciali dai colori
+// che hanno gia' ovunque nell'app). Ritorna null se il colore e' una CSS variable,
+// perche' un valore var() non si puo' concatenare con l'alpha esadecimale.
+export function coloreRigaBase(fase) {
+  const base = FASE_RIGA_CLR[fase] || FASE_CLR[fase];
+  return base && base.charAt(0) === "#" ? base : null;
+}
+export function coloreRiga(fase) {
+  const base = coloreRigaBase(fase);
+  return base ? base + RIGA_ALPHA : null;
+}
+
 export const FASE_LABEL = {
-  INVITO:"Invito", CONOSCITIVA:"Conoscitiva", FUP1:"FUP 1", FUP2:"FUP 2", PACK:"Pack",
+  INVITO:"Invito", FISSATO:"Fissato", CONOSCITIVA:"Conoscitiva", FUP1:"FUP 1", FUP2:"FUP 2", PACK:"Pack",
   CLOSING:"Closing", SUB:"Iscritto", DA_RISENTIRE:"Da risentire", DA_RIFISSARE:"Da rifissare", NON_INT:"Non Int.", NON_PIACE:"Non mi piace", RIMBORSO:"Rimborso",
 };
 
@@ -199,9 +244,17 @@ export function teamStats(prospects) {
 }
 
 
-export function Av({ n, c, color, size=34 }) {
+// soft=true: disco scuro appena tinto con contorno e iniziali del colore, invece
+// del cerchio pieno con testo bianco. Serve dove il colore arriva dalla palette
+// delle righe (giallo, menta): un disco pieno di quei toni con iniziali bianche
+// e' illeggibile e visivamente aggressivo. Variante e non sostituzione, perche'
+// gli avatar di Dashboard, Team ed Eventi devono restare pieni.
+export function Av({ n, c, color, size=34, soft=false }) {
+  const style = soft
+    ? {background:color+"1f", border:"1px solid "+color+"55", color:color, boxShadow:"none"}
+    : {background:"linear-gradient(135deg,"+color+","+color+"99)", border:"none", color:"#fff", boxShadow:"0 0 10px "+color+"35"};
   return (
-    <div style={{width:size,height:size,borderRadius:"50%",flexShrink:0,background:"linear-gradient(135deg,"+color+","+color+"99)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:size*0.32,boxShadow:"0 0 10px "+color+"35"}}>
+    <div style={{width:size,height:size,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:size*0.32,boxSizing:"border-box",...style}}>
       {(n||"?")[0]}{(c||"")[0]}
     </div>
   );

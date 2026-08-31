@@ -5,9 +5,8 @@
 // ══════════════════════════════════════════════════════════════
 import { useState, useEffect } from "react";
 import {
-  Av, CICLO_CORRENTE, CICLO_NUMS, FASE_CLR, FASE_LABEL, FASI_FUNNEL, FASI_SPECIALI,
-  FONTE_ICO, FONTI, INTERESSE, INTERESSE_CLR, JUNG, PROFILO_TOTAL,
-  cicloOfDate, fmt, profiloBadge,
+  Av, CICLO_NUMS, FASE_CLR, FASE_LABEL, FASI_FUNNEL, FASI_SPECIALI,
+  FONTI, INTERESSE, coloreRigaBase,
 } from "../shared";
 
 function chatColor(pct) {
@@ -123,7 +122,118 @@ function ChatCounterButton() {
 }
 // ─────────────────────────────────────────────────────────────────
 
-export function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, setFFonte, fCiclo, setFCiclo, fCitta, setFCitta, fInteresse, setFInteresse, fPercorso, setFPercorso, fMembro, setFMembro, fSquadra, setFSquadra, sortBy, setSortBy, downline, auth, onOpen, onAdd, listaMode, setListaMode, hasTeam }) {
+// Presenza diretta di una fase nello storico. NON usa reachedEver di shared.jsx:
+// quella funzione considera CONOSCITIVA raggiunta se c'e' FUP1, un'assunzione
+// sequenziale che qui falserebbe la spunta (casella vuota ma conteggiata).
+const hasFase = (p, f) => (p.storico||[]).some(s => s.fase === f);
+
+// Riga della griglia. Componente separato perche' le note hanno uno stato locale
+// (si scrive liberamente e si salva sull'uscita dal campo): tenerlo nel padre
+// farebbe ripartire un render dell'intera lista a ogni carattere digitato.
+// Cella di spunta. Niente <input type="checkbox">: il controllo nativo di macOS
+// e' un rettangolo bianco pieno, cioe' la cosa piu' luminosa in una UI scura —
+// il vuoto griderebbe piu' del pieno. Qui il non-fatto e' un contorno appena
+// percepibile e il fatto e' l'unica cosa colorata.
+// Il fondo tinto della cella spuntata non e' decorazione: celle contigue si
+// saldano e la riga si legge come una barra di avanzamento senza contare nulla.
+function CellaFase({ p, fase, attiva, editabile, onToggle, cellStyle }) {
+  const clr = FASE_CLR[fase];
+  return (
+    <td style={{ ...cellStyle, padding: 0, textAlign: "center" }}>
+      <button
+        type="button"
+        onClick={() => editabile && onToggle(p, fase, !attiva)}
+        disabled={!editabile}
+        aria-pressed={attiva}
+        aria-label={FASE_LABEL[fase] + " " + (p.nome || "")}
+        title={editabile ? FASE_LABEL[fase] : "Prospect di un altro membro"}
+        style={{
+          width: 18, height: 18, padding: 0, margin: "10px auto", display: "block",
+          borderRadius: 5, cursor: editabile ? "pointer" : "default",
+          background: attiva ? clr : "transparent",
+          border: "1px solid " + (attiva ? clr : "var(--border2)"),
+          opacity: editabile ? 1 : .4,
+          transition: "background .12s ease, border-color .12s ease",
+          position: "relative",
+        }}
+      >
+        {attiva && (
+          <svg viewBox="0 0 16 16" width="11" height="11" style={{ position: "absolute", top: 2, left: 2 }} aria-hidden="true">
+            <path d="M3 8.5l3.2 3.2L13 5" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </button>
+    </td>
+  );
+}
+
+function RigaGriglia({ p, listaMode, editabile, onOpen, onToggleFase, onSaveNote }) {
+  const [nota, setNota] = useState(p.note || "");
+  const [notaAttiva, setNotaAttiva] = useState(false);
+  useEffect(() => { setNota(p.note || ""); }, [p.id, p.note]);
+  const speciale = FASI_SPECIALI.includes(p.fase);
+  const base = coloreRigaBase(p.fase);
+
+  // Il colore sta concentrato a sinistra, non spalmato sulla riga: una striscia
+  // larga 1400px tinta di giallo saturo diventa un banner di avviso, non un dato.
+  // Concentrato su poca area il colore puo' stare a saturazione piena senza pesare,
+  // e la zona delle caselle resta neutra cosi' le spunte si leggono pulite.
+  // La sfumatura sta SOLO nella cella del nome: un gradiente applicato a ogni <td>
+  // ripartirebbe da capo in ognuna, a bande.
+  const cellStyle = { borderTop: "1px solid #0d1b3355", borderBottom: "1px solid #0d1b3355" };
+
+  return (
+    <tr>
+      <td style={{
+        ...cellStyle, padding: "6px 14px 6px 11px", position: "sticky", left: 0, zIndex: 1,
+        // 5px e non 3: e' l'unico punto in cui il colore sta al 100%, ed e' li' che
+        // due verdi vicini si distinguono davvero.
+        borderLeft: "5px solid " + (base || "var(--border2)"),
+        backgroundColor: "var(--bg2)",
+        backgroundImage: base ? "linear-gradient(90deg," + base + "2e, transparent)" : "none",
+      }}>
+        <div onClick={() => onOpen(p)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", minWidth: 180 }}>
+          <Av n={p.nome} c={p.cognome} color={base || "var(--border2)"} size={32} soft />
+          <div style={{ overflow: "hidden", lineHeight: 1.25 }}>
+            <div style={{ color: "var(--text)", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>{p.nome} {p.cognome}</div>
+            {speciale && <div style={{ fontSize: 10, color: base || "var(--muted)", fontWeight: 600, marginTop: 1 }}>{FASE_LABEL[p.fase]}</div>}
+          </div>
+        </div>
+      </td>
+      {listaMode === "team" && (
+        <td style={{ ...cellStyle, padding: "6px 10px" }}>
+          <span style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap" }}>{p._ownerName || "\u2014"}</span>
+        </td>
+      )}
+      {FASI_FUNNEL.map(f => (
+        <CellaFase key={f} p={p} fase={f} attiva={hasFase(p, f)} editabile={editabile} onToggle={onToggleFase} cellStyle={cellStyle} />
+      ))}
+      <td style={{ ...cellStyle, padding: "4px 8px 4px 16px", minWidth: 240 }}>
+        <input
+          value={nota} disabled={!editabile}
+          onChange={e => setNota(e.target.value)}
+          onFocus={() => setNotaAttiva(true)}
+          onBlur={() => { setNotaAttiva(false); onSaveNote(p, nota); }}
+          onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+          placeholder={editabile && notaAttiva ? "Scrivi una nota" : ""}
+          style={{
+            width: "100%", background: notaAttiva ? "var(--bg3)" : "transparent",
+            border: "1px solid " + (notaAttiva ? "var(--border2)" : "transparent"),
+            borderRadius: 7, padding: "5px 9px", color: nota ? "var(--text)" : "var(--muted)",
+            fontSize: 12, fontFamily: "inherit", transition: "background .12s ease, border-color .12s ease",
+          }}
+        />
+      </td>
+      <td style={{ ...cellStyle, padding: "6px 14px 6px 0", color: "var(--border2)", fontSize: 15, cursor: "pointer" }} onClick={() => onOpen(p)}>{"\u203a"}</td>
+    </tr>
+  );
+}
+
+export function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, setFFonte, fCiclo, setFCiclo, fCitta, setFCitta, fInteresse, setFInteresse, fPercorso, setFPercorso, fMembro, setFMembro, fSquadra, setFSquadra, sortBy, setSortBy, downline, auth, onOpen, onAdd, onToggleFase, onSaveNote, listaMode, setListaMode, hasTeam }) {
+  // contatori di colonna: contano solo le righe visibili (cioe' filtrate), cosi'
+  // il numero risponde sempre alla domanda "quante ne ho fatte in questo filtro"
+  const conteggi = {};
+  FASI_FUNNEL.forEach(f => { conteggi[f] = prospects.filter(p => hasFase(p,f)).length; });
   return (
     <div style={{padding:"2rem 2.2rem",maxWidth:1280,margin:"0 auto"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.4rem",flexWrap:"wrap",gap:12}}>
@@ -190,51 +300,33 @@ export function Lista({ prospects, total, search, setSearch, fFase, setFFase, fF
       </div>
       {prospects.length===0
         ?<div style={{textAlign:"center",padding:"4rem",color:"var(--border2)"}}><div style={{fontSize:44,marginBottom:12}}></div><p style={{fontSize:14,marginBottom:14}}>Nessun prospect trovato</p><button onClick={onAdd} style={{padding:"9px 20px",fontSize:13,fontWeight:800,background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:10,cursor:"pointer"}}>Aggiungi il primo</button></div>
-        :<div className="tbl-wrap" style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",minWidth:700}}>
-            <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Prospect",...(listaMode==="team"?["Di"]:[]),"Ciclo","Conosciuto","Fonte","Fase","Interesse","Checklist","Profilo","Pers.",""].map(h=>(<th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",letterSpacing:.8,padding:"12px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
-            <tbody>{prospects.map(p=>{
-              const c=cicloOfDate(p.conosciutoAt);
-              const badge=profiloBadge(p);
-              const bc=badge.compilati===0?"var(--border2)":badge.positivi>=6?"#10b981":badge.positivi>=3?"var(--a2)":"#f59e0b";
-              const jung = (() => {
-                const j = p.profilazione?.jung;
-                if (!j) return [];
-                if (Array.isArray(j)) return JUNG.filter(x=>j.includes(x.key));
-                return JUNG.filter(x=>x.key===j);
-              })();
-              return (
-                <tr key={p.id} className="hrow" onClick={()=>onOpen(p)} style={{cursor:"pointer",borderBottom:"1px solid #0d1b3355"}}>
-                  <td style={{padding:"12px 16px"}}><div style={{display:"flex",alignItems:"center",gap:10}}><Av n={p.nome} c={p.cognome} color={FASE_CLR[p.fase]}/><span style={{color:"var(--text)",fontWeight:700,fontSize:13}}>{p.nome} {p.cognome}</span></div></td>
-                  {listaMode==="team"&&<td style={{padding:"12px 16px"}}><span style={{fontSize:11,color:"#8b5cf6",fontWeight:700,background:"#8b5cf618",borderRadius:6,padding:"2px 8px"}}>{p._ownerName||"\u2014"}</span></td>}
-                  <td style={{padding:"12px 16px"}}>{c?<span style={{background:c===CICLO_CORRENTE?"var(--a1-13)":"var(--border)",color:c===CICLO_CORRENTE?"var(--a2)":"var(--muted)",borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>C{c}</span>:<span style={{color:"var(--border2)"}}>\u2014</span>}</td>
-                  <td style={{padding:"12px 16px",color:"var(--muted)",fontSize:12}}>{fmt(p.conosciutoAt)}</td>
-                  <td style={{padding:"12px 16px",color:"var(--muted)",fontSize:12}}>{FONTE_ICO[p.fonte]} {p.fonte}</td>
-                  <td style={{padding:"12px 16px"}}><span style={{display:"inline-flex",alignItems:"center",borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:700,color:"#fff",background:FASE_CLR[p.fase],boxShadow:"0 0 8px "+FASE_CLR[p.fase]+"35"}}>{FASE_LABEL[p.fase]}</span></td>
-                  <td style={{padding:"12px 16px"}}>
-                    {p.interesse
-                      ? <span style={{fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:6,color:INTERESSE_CLR[p.interesse],background:INTERESSE_CLR[p.interesse]+"20"}}>{p.interesse}</span>
-                      : <span style={{color:"var(--border2)",fontSize:11}}>\u2014</span>
-                    }
-                  </td>
-                  <td style={{padding:"12px 16px"}}>
-                    {p.fase==="SUB"
-                      ? <div style={{display:"flex",gap:6}}>
-                          {["kyc","pandadoc","click"].map(k=>{
-                            const done=p.checklist?.[k];
-                            const label=k==="pandadoc"?"PD":k.toUpperCase();
-                            return <span key={k} style={{fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:5,background:done?"#10b98120":"#1e3a5f20",color:done?"#10b981":"var(--muted)",border:"1px solid "+(done?"#10b98140":"var(--border2)")}}>{label}</span>;
-                          })}
-                        </div>
-                      : <span style={{color:"var(--border2)",fontSize:11}}>\u2014</span>
-                    }
-                  </td>
-                  <td style={{padding:"12px 16px"}}>{badge.compilati===0?<span style={{color:"var(--border2)",fontSize:11}}>\u2014</span>:<span style={{display:"inline-flex",alignItems:"center",gap:4,borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:800,color:bc,background:bc+"18",border:"1px solid "+bc+"30"}}> {badge.positivi}/{PROFILO_TOTAL}</span>}</td>
-                  <td style={{padding:"12px 16px"}}>{jung.length>0?<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{jung.map(j=><span key={j.key} title={j.sub} style={{display:"inline-flex",alignItems:"center",gap:4,borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:800,color:j.border,background:j.border+"18",border:"1px solid "+j.border+"35"}}><span style={{width:6,height:6,borderRadius:"50%",background:j.border,flexShrink:0}}/>{j.label}</span>)}</div>:<span style={{color:"var(--border2)",fontSize:11}}>{"—"}</span>}</td>
-                  <td style={{padding:"12px 16px",color:"var(--border2)",fontSize:16}}>{"\u203a"}</td>
-                </tr>
-              );
-            })}</tbody>
+        :<div className="tbl-wrap" style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,overflowX:"auto"}}>
+          {/* borderCollapse separate + borderSpacing verticale: e' quello che stacca
+              le righe una dall'altra e permette angoli arrotondati e bordi colorati
+              per riga. Con "collapse" le righe restano incollate e la tinta diventa
+              un blocco continuo in cui non si distingue piu' una persona dall'altra. */}
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:960}}>
+            <thead>
+              <tr>
+                <th style={{textAlign:"left",color:"var(--muted)",fontWeight:600,fontSize:11,padding:"4px 14px 10px",whiteSpace:"nowrap",position:"sticky",left:0,background:"var(--bg2)",zIndex:2}}>Prospect</th>
+                {listaMode==="team" && <th style={{textAlign:"left",color:"var(--muted)",fontWeight:600,fontSize:11,padding:"11px 10px",whiteSpace:"nowrap"}}>Di</th>}
+                {FASI_FUNNEL.map(f=>(
+                  // una sola cosa colorata per colonna: il contatore. L'etichetta resta
+                  // grigia, altrimenti testa e numero si fanno concorrenza.
+                  <th key={f} style={{padding:"4px 4px 10px",minWidth:62,verticalAlign:"bottom"}}>
+                    <div style={{fontSize:10,fontWeight:600,color:"var(--muted)",whiteSpace:"nowrap",textAlign:"center"}}>{FASE_LABEL[f]}</div>
+                    <div style={{marginTop:2,textAlign:"center",fontSize:14,fontWeight:800,fontVariantNumeric:"tabular-nums",color:conteggi[f]>0?FASE_CLR[f]:"var(--border2)"}}>{conteggi[f]}</div>
+                  </th>
+                ))}
+                <th style={{textAlign:"left",color:"var(--muted)",fontWeight:600,fontSize:11,padding:"11px 8px 11px 16px",minWidth:240}}>Note</th>
+                <th style={{padding:"11px 14px 11px 0"}}></th>
+              </tr>
+            </thead>
+            <tbody>{prospects.map(p=>(
+              <RigaGriglia key={p.id} p={p} listaMode={listaMode}
+                editabile={!p._userId || p._userId===auth?.userId}
+                onOpen={onOpen} onToggleFase={onToggleFase} onSaveNote={onSaveNote} />
+            ))}</tbody>
           </table>
         </div>
       }

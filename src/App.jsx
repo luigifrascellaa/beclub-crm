@@ -822,6 +822,43 @@ export default function App() {
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
   }
 
+  // ── Griglia prospect (vista foglio) ──────────────────────────────
+  // Spunta/toglie UNA fase senza toccare le altre: a differenza di buildStorico
+  // qui NON si riempiono i buchi, perche' la griglia deve poter rappresentare
+  // "ha fatto FUP1 ma non la conoscitiva". Il riempimento automatico al login e'
+  // gia' disattivato dal flag profiles.storico_migrato.
+  // La fase corrente resta un valore derivato (la piu' avanzata spuntata) perche'
+  // colori, contatori della sidebar e ordinamenti la usano ovunque. Se il prospect
+  // e' in una fase speciale (Da risentire, Non int., Rimborso) la fase NON viene
+  // sovrascritta: quello stato e' una decisione presa, non un punto del percorso.
+  async function toggleFaseGrid(p, fase, spuntata) {
+    if (p._userId && p._userId !== auth.userId) return; // sola lettura sui prospect altrui
+    const senza = (p.storico||[]).filter(s=>s.fase!==fase);
+    const storico = spuntata
+      ? [...senza, {fase, data: today()}].sort((a,b)=>FASI_FUNNEL.indexOf(a.fase)-FASI_FUNNEL.indexOf(b.fase))
+      : senza;
+    const nuovaFase = FASI_SPECIALI.includes(p.fase) ? p.fase : highestReached({storico});
+    const upd = {...p, fase:nuovaFase, storico};
+    try {
+      await sbUpdate(auth.token, p.id, toDB(upd, auth.userId));
+      setData(d=>d.map(x=>x.id===p.id?upd:x));
+      setDlProspects(d=>d.map(x=>x.id===p.id?{...upd,_userId:x._userId,_ownerName:x._ownerName}:x));
+      setSel(s=>s&&s.id===p.id?upd:s);
+    } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
+  }
+
+  async function salvaNoteGrid(p, note) {
+    if (p._userId && p._userId !== auth.userId) return;
+    if ((p.note||"") === (note||"")) return; // niente scrittura se non e' cambiato nulla
+    const upd = {...p, note};
+    try {
+      await sbUpdate(auth.token, p.id, toDB(upd, auth.userId));
+      setData(d=>d.map(x=>x.id===p.id?upd:x));
+      setDlProspects(d=>d.map(x=>x.id===p.id?{...upd,_userId:x._userId,_ownerName:x._ownerName}:x));
+      setSel(s=>s&&s.id===p.id?upd:s);
+    } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
+  }
+
   async function advanceFase(p) {
     const i=FASI_FUNNEL.indexOf(p.fase);
     if (i<0||i>=FASI_FUNNEL.length-1) return;
@@ -847,7 +884,7 @@ export default function App() {
       setDlProspects(d=>d.map(x=>x.id===p.id?{...upd,_userId:x._userId,_ownerName:x._ownerName}:x));
       setSel(upd);
       showToast(fase==="DA_RISENTIRE"?" Da risentire":fase==="DA_RIFISSARE"?" Da rifissare":fase==="NON_INT"?" Non interessato":fase==="NON_PIACE"?" Non mi piace":"↩ Riattivato",
-        fase==="DA_RISENTIRE"?"#f59e0b":fase==="DA_RIFISSARE"?"#f97316":fase==="NON_INT"?"#6b7280":fase==="NON_PIACE"?"#ec4899":"var(--a1)");
+        fase==="DA_RISENTIRE"?"#c084fc":fase==="DA_RIFISSARE"?"#6366f1":fase==="NON_INT"?"#6b7280":fase==="NON_PIACE"?"#ec4899":"var(--a1)");
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
   }
 
@@ -896,7 +933,7 @@ export default function App() {
     const ownerId=p._userId||auth.userId;
     const newStorico = p.storico.filter(s=>s.fase!==faseToRemove);
     // Calcola la nuova fase (l'ultima rimasta nello storico)
-    const FASI_ORDER = ["INVITO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB","DA_RISENTIRE","DA_RIFISSARE","NON_INT","NON_PIACE"];
+    const FASI_ORDER = ["INVITO","FISSATO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB","DA_RISENTIRE","DA_RIFISSARE","NON_INT","NON_PIACE"];
     const lastFase = newStorico.reduce((best, s) => {
       const bi = FASI_ORDER.indexOf(best);
       const si = FASI_ORDER.indexOf(s.fase);
@@ -1236,7 +1273,7 @@ export default function App() {
         ) : (
           <>
             {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} cdChiusi={cdChiusi} cdForzaChiusura={cdForzaChiusura} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} squadre={squadre} />}
-            {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} fSquadra={fSquadra} setFSquadra={setFSquadra} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale"){setFMembro("");setFSquadra("");}}} hasTeam={dlProspects.length>0} />}
+            {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} fSquadra={fSquadra} setFSquadra={setFSquadra} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} onToggleFase={toggleFaseGrid} onSaveNote={salvaNoteGrid} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale"){setFMembro("");setFSquadra("");}}} hasTeam={dlProspects.length>0} />}
             {view==="stats"   && <Statistiche data={data} dlProspects={dlProspectsAttivi} auth={auth} allProfiles={allProfiles} positions={positions} />}
             {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} onToggleMarketer={toggleMarketerUnlocked} onSetStatoMembro={setStatoMembro} onRimborsaMembro={rimborsaMembro} />}
             {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} />}
@@ -1415,13 +1452,8 @@ function Statistiche({ data, dlProspects, auth, allProfiles, positions }) {
   // tutti tuoi e tu non stai in nessuna delle tue due gambe (getSquadraRelativeTo
   // ritorna null sul root), quindi filtrerebbe sempre a zero.
   const squadraAttiva = statsMode === "team" ? squadra : "";
-  // cache di risalita dell'albero, valida per un singolo render
   const squadraCache = {};
 
-  // La squadra di un prospect e' quella del suo proprietario (_userId), risalita
-  // sull'albero rispetto a chi sta guardando. I prospect personali (che in team
-  // mode arrivano da `data` e non hanno _userId) restano fuori quando si filtra:
-  // non appartengono ne' alla gamba sinistra ne' alla destra.
   const activeData = (statsMode === "team" ? [...data, ...(dlProspects||[])] : data)
     .filter(isProspectAttivo)
     .filter(p => {
@@ -1437,9 +1469,6 @@ function Statistiche({ data, dlProspects, auth, allProfiles, positions }) {
   const tableRows=[...cicli].sort((a,b)=>b-a).map(c=>{const r={c};FASI_FUNNEL.forEach(f=>{r[f]=activeData.filter(p=>reachedInCiclo(p,f,c)).length;});r.conv=r.INVITO>0?Math.round(r.SUB/r.INVITO*100):r.FUP1>0?Math.round(r.SUB/r.FUP1*100):0;return r;});
   const ts={background:"var(--bg3)",border:"1px solid var(--border2)",borderRadius:8,color:"var(--text)",fontSize:12};
   const tProps={contentStyle:ts,itemStyle:{color:"var(--text)"},labelStyle:{color:"var(--text)",fontWeight:700}};
-  // Se e' il filtro squadra a svuotare i dati serve un modo per toglierlo:
-  // senza il bottone di reset il return anticipato nasconde anche le tendine
-  // e l'utente resta bloccato su una pagina vuota.
   if (!activeData.length) return <div style={{padding:"2rem 2.2rem"}}><h1 style={{fontWeight:900,fontSize:26,color:"var(--text)",marginBottom:8}}>Statistiche</h1><div style={{textAlign:"center",padding:"5rem",color:"var(--border2)"}}><div style={{fontSize:44,marginBottom:12}}></div><p>{squadraAttiva ? ("Nessun prospect nella squadra " + squadraAttiva) : hasTeam ? "Nessun dato in questa modalita — prova a switchare su Team" : "Aggiungi prospect per vedere le statistiche"}</p>{squadraAttiva && <button onClick={()=>setSquadra("")} style={{marginTop:14,padding:"8px 16px",background:"var(--bg3)",color:"var(--a2)",border:"1px solid var(--border2)",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>Mostra tutte le squadre</button>}</div></div>;
   return (
     <div style={{padding:"2rem 2.2rem",maxWidth:1280,margin:"0 auto"}}>
@@ -1717,15 +1746,16 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, o
                     if(p.storico?.some(s=>s.fase===stepPopup)){
                       onUpdateStoricoData(stepPopup,stepDate);
                     } else {
-                      // Aggiungi la fase allo storico e aggiorna la fase se necessaria.
-                      // Le fasi precedenti mancanti vengono aggiunte automaticamente (fillGapsStorico):
-                      // se segni FUP2, vuol dire che Invito/Conoscitiva/FUP1 sono già state fatte.
-                      const FASI_ORDER=["INVITO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
+                      // Aggiunge SOLO la fase segnata, senza riempire le precedenti.
+                      // Il riempimento automatico (fillGapsStorico) e' stato tolto: da quando
+                      // la lista prospect e' una griglia a spunte, un buco e' una scelta
+                      // dell'utente e va rispettato anche entrando da qui.
+                      const FASI_ORDER=["INVITO","FISSATO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
                       const currentIdx=FASI_ORDER.indexOf(p.fase);
                       const newIdx=FASI_ORDER.indexOf(stepPopup);
                       const newFase=newIdx>currentIdx?stepPopup:p.fase;
-                      const conStep=[...(p.storico||[]).filter(s=>s.fase!==stepPopup),{fase:stepPopup,data:stepDate}];
-                      const newStorico=fillGapsStorico({...p,storico:conStep})||conStep.sort((a,b)=>FASI_FUNNEL.indexOf(a.fase)-FASI_FUNNEL.indexOf(b.fase));
+                      const newStorico=[...(p.storico||[]).filter(s=>s.fase!==stepPopup),{fase:stepPopup,data:stepDate}]
+                        .sort((a,b)=>FASI_FUNNEL.indexOf(a.fase)-FASI_FUNNEL.indexOf(b.fase));
                       onUpdateStoricoData(stepPopup,stepDate,newFase,newStorico);
                     }
                     setStepPopup(null);
@@ -1808,7 +1838,7 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, o
             {isSpeciale&&<button onClick={onRiattiva} style={{padding:"9px 16px",background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:9,cursor:"pointer",fontWeight:800,fontSize:12}}>↩ Riattiva nel Funnel</button>}
             <button onClick={onEdit} style={{padding:"9px 16px",background:"var(--bg4)",color:"#7da8d8",border:"1px solid var(--border2)",borderRadius:9,cursor:"pointer",fontWeight:600,fontSize:12}}> Modifica</button>
           </div>
-          {!isSpeciale&&(<div style={{borderTop:"1px solid #0d1b33",marginTop:13,paddingTop:13,display:"flex",gap:9,flexWrap:"wrap"}}><div style={{fontSize:10,color:"var(--border2)",width:"100%",fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:2}}>Stato speciale</div>{p.fase!=="DA_RISENTIRE"&&<button onClick={onFollowUp} style={{padding:"8px 13px",background:"#f59e0b16",color:"#fbbf24",border:"1px solid #f59e0b38",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Da risentire</button>}{p.fase!=="DA_RIFISSARE"&&<button onClick={onDaRifissare} style={{padding:"8px 13px",background:"#f9731616",color:"#fb923c",border:"1px solid #f9731638",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Da rifissare</button>}{p.fase!=="NON_INT"&&<button onClick={onNonInt} style={{padding:"8px 13px",background:"#ef444414",color:"#f87171",border:"1px solid #ef444436",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Non interessato</button>}{p.fase!=="NON_PIACE"&&<button onClick={onNonPiace} style={{padding:"8px 13px",background:"#ec489918",color:"#f472b6",border:"1px solid #ec489938",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Non mi piace</button>}</div>)}
+          {!isSpeciale&&(<div style={{borderTop:"1px solid #0d1b33",marginTop:13,paddingTop:13,display:"flex",gap:9,flexWrap:"wrap"}}><div style={{fontSize:10,color:"var(--border2)",width:"100%",fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:2}}>Stato speciale</div>{p.fase!=="DA_RISENTIRE"&&<button onClick={onFollowUp} style={{padding:"8px 13px",background:"#c084fc16",color:"#d8b4fe",border:"1px solid #c084fc38",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Da risentire</button>}{p.fase!=="DA_RIFISSARE"&&<button onClick={onDaRifissare} style={{padding:"8px 13px",background:"#6366f116",color:"#a5b4fc",border:"1px solid #6366f138",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Da rifissare</button>}{p.fase!=="NON_INT"&&<button onClick={onNonInt} style={{padding:"8px 13px",background:"#ef444414",color:"#f87171",border:"1px solid #ef444436",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Non interessato</button>}{p.fase!=="NON_PIACE"&&<button onClick={onNonPiace} style={{padding:"8px 13px",background:"#ec489918",color:"#f472b6",border:"1px solid #ec489938",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Non mi piace</button>}</div>)}
         </>
       )}
       {activeTab==="profilazione"&&<ProfilazioneTab p={p} onUpdateProfilo={onUpdateProfilo}/>}
