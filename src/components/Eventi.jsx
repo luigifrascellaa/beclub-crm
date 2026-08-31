@@ -112,7 +112,7 @@ function PersonaModal({ persona, defaultStato, onSave, onClose, onDelete, auth, 
               <option value="destra">Destra</option>
             </select>
             <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 5, lineHeight: 1.4 }}>
-              Serve solo per i membri del team gia' presenti in struttura: indica in quale delle tue due gambe far rientrare il ticket nelle numeriche Sinistra/Destra. Se il ticket e' registrato da un altro membro, la squadra viene calcolata dall'albero e questo campo viene ignorato.
+              Serve solo per i membri del team gia' presenti in struttura: indica in quale delle tue due gambe far rientrare la persona nelle numeriche Sinistra/Destra. Se il record e' di un altro membro, la squadra viene calcolata dall'albero e questo campo viene ignorato.
             </div>
           </div>
         )}
@@ -249,6 +249,10 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   const [filtroVenduti, setFiltroVenduti] = useState("tutti"); // 'tutti' | 'team' | 'prospect'
   const [filtroMembro, setFiltroMembro] = useState(""); // "" = tutti i membri
   const [filtroSquadra, setFiltroSquadra] = useState(""); // "" | 'sinistra' | 'destra'
+  // filtri della colonna "In ballo": tenuti separati da quelli dei venduti perche'
+  // rispondono a domande diverse (chi devo ancora chiudere, vs chi ha gia' comprato)
+  const [ibOrigine, setIbOrigine] = useState("tutti"); // 'tutti' | 'personali' | 'team'
+  const [ibSquadra, setIbSquadra] = useState("");      // "" | 'sinistra' | 'destra'
   const [membroEspanso, setMembroEspanso] = useState(null);
   const [cercaMembro, setCercaMembro] = useState("");
   const [soloLeader, setSoloLeader] = useState(false);
@@ -282,21 +286,35 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
     [persone, myTeamIds, filtroVenduti, filtroMembro]
   );
 
-  // squadra (sinistra/destra) di ogni TICKET rispetto a chi guarda la pagina.
-  // Indicizzato per p.id (non per user_id): la squadra manuale e' per singolo record,
-  // quindi due ticket dello stesso proprietario possono cadere in gambe diverse.
-  // Regola: l'albero ha sempre la precedenza; il valore manuale entra in gioco solo
-  // quando l'albero non sa rispondere E il record e' del proprio utente (i ticket
-  // registrati da un membro della downline cadono gia' nella gamba di quel membro).
+  // squadra (sinistra/destra) di ogni RECORD rispetto a chi guarda la pagina.
+  // Indicizzata per p.id e non per user_id: la squadra manuale e' per singolo
+  // record, quindi due persone registrate dallo stesso proprietario possono
+  // cadere in gambe diverse. Calcolata su tutte le persone dell'evento (non solo
+  // i venduti) perche' serve anche alla colonna "In ballo".
+  // Regola: l'albero ha sempre la precedenza; il valore manuale entra solo quando
+  // l'albero non sa rispondere E il record e' del proprio utente (i record di un
+  // membro della downline cadono gia' nella gamba di quel membro, e il valore
+  // manuale di un altro utente e' relativo a LUI, non a me: usarlo sfaserebbe i conti).
   const squadraOf = useMemo(() => {
     const cache = {};
     const map = {};
-    venduti.forEach(p => {
+    persone.forEach(p => {
       const daAlbero = getSquadraRelativeTo(auth.userId, p.user_id, allProfiles, positions, cache);
       map[p.id] = daAlbero || (p.user_id === auth.userId ? (p.squadra_manuale || null) : null);
     });
     return map;
-  }, [allProfiles, positions, auth.userId, venduti]);
+  }, [allProfiles, positions, auth.userId, persone]);
+
+  // lista finale della colonna "In ballo", con i due filtri applicati
+  const inBalloVisibili = useMemo(() =>
+    inBallo.filter(p => {
+      if (ibOrigine === "personali" && p.user_id !== auth.userId) return false;
+      if (ibOrigine === "team" && p.user_id === auth.userId) return false;
+      if (ibSquadra && squadraOf[p.id] !== ibSquadra) return false;
+      return true;
+    }),
+    [inBallo, ibOrigine, ibSquadra, squadraOf, auth.userId]
+  );
 
   // per ogni membro della downline: ticket personali, della sua downline sinistra/destra, e totale
   const membriBreakdown = useMemo(() => {
@@ -412,7 +430,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   async function salvaPersona(form) {
     // la squadra manuale ha senso solo per la categoria "team": se il record torna
     // "prospect" il campo va azzerato, altrimenti resta un valore fantasma che
-    // continuerebbe a spostare il ticket in una gamba
+    // continuerebbe a spostare la persona in una gamba
     const categoria = form.categoria || "team";
     const squadraManuale = categoria === "team" ? (form.squadra_manuale || null) : null;
     try {
@@ -529,17 +547,36 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
             <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "#f59e0b" }}>In ballo {"\u00b7"} {inBallo.length}</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#f59e0b" }}>
+                    In ballo {"\u00b7"} {inBalloVisibili.length}
+                    {inBalloVisibili.length !== inBallo.length && (
+                      <span style={{ color: "var(--muted)", fontWeight: 700 }}> {"/"} {inBallo.length}</span>
+                    )}
+                  </div>
                   <button onClick={() => setModal({ persona: null, stato: "in_ballo" })}
                     style={{ padding: "5px 12px", fontSize: 11, fontWeight: 800, background: "#f59e0b18", color: "#f59e0b", border: "1px solid #f59e0b40", borderRadius: 8, cursor: "pointer" }}>
                     + Aggiungi
                   </button>
                 </div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                  <select value={ibOrigine} onChange={e => setIbOrigine(e.target.value)} style={{ flex: "1 1 120px", minWidth: 120, fontSize: 12 }}>
+                    <option value="tutti">Tutti</option>
+                    <option value="personali">Personali</option>
+                    <option value="team">Team</option>
+                  </select>
+                  <select value={ibSquadra} onChange={e => setIbSquadra(e.target.value)} style={{ flex: "1 1 120px", minWidth: 120, fontSize: 12 }}>
+                    <option value="">Tutte le squadre</option>
+                    <option value="sinistra">Sinistra</option>
+                    <option value="destra">Destra</option>
+                  </select>
+                </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 420, overflowY: "auto" }}>
-                  {inBallo.length === 0
-                    ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>Nessuno al momento</div>
-                    : inBallo.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner={p.user_id !== auth.userId} onClick={() => canEdit(p) && setModal({ persona: p })} onMarkSold={canEdit(p) ? () => salvaPersona({ ...p, stato: "venduto" }) : null} />)
+                  {inBalloVisibili.length === 0
+                    ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>
+                        {inBallo.length === 0 ? "Nessuno al momento" : "Nessuno con questi filtri"}
+                      </div>
+                    : inBalloVisibili.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner={p.user_id !== auth.userId} squadraLabel={squadraOf[p.id]} onClick={() => canEdit(p) && setModal({ persona: p })} onMarkSold={canEdit(p) ? () => salvaPersona({ ...p, stato: "venduto" }) : null} />)
                   }
                 </div>
               </div>
