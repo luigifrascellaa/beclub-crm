@@ -831,16 +831,27 @@ export default function App() {
   // colori, contatori della sidebar e ordinamenti la usano ovunque. Se il prospect
   // e' in una fase speciale (Da risentire, Non int., Rimborso) la fase NON viene
   // sovrascritta: quello stato e' una decisione presa, non un punto del percorso.
+  // Un leader puo' modificare anche i prospect della propria downline: in modalita'
+  // Team la griglia mostra solo quelli, quindi il perimetro e' gia' quello giusto.
+  // NB: e' un cancello di comodita' lato UI, non una barriera di sicurezza — le
+  // policy RLS su prospects sono scritte per ruolo, non per struttura.
+  function puoModificareGriglia(p) {
+    return !p._userId || p._userId === auth.userId || !!auth?.profile?.is_leader;
+  }
+
   async function toggleFaseGrid(p, fase, spuntata) {
-    if (p._userId && p._userId !== auth.userId) return; // sola lettura sui prospect altrui
+    if (!puoModificareGriglia(p)) return;
     const senza = (p.storico||[]).filter(s=>s.fase!==fase);
     const storico = spuntata
       ? [...senza, {fase, data: today()}].sort((a,b)=>FASI_FUNNEL.indexOf(a.fase)-FASI_FUNNEL.indexOf(b.fase))
       : senza;
     const nuovaFase = FASI_SPECIALI.includes(p.fase) ? p.fase : highestReached({storico});
     const upd = {...p, fase:nuovaFase, storico};
+    // il proprietario resta chi era: passare auth.userId trasferirebbe il prospect
+    // al leader che lo modifica, facendolo sparire dalla lista del suo titolare
+    const ownerId = p._userId || auth.userId;
     try {
-      await sbUpdate(auth.token, p.id, toDB(upd, auth.userId));
+      await sbUpdate(auth.token, p.id, toDB(upd, ownerId));
       setData(d=>d.map(x=>x.id===p.id?upd:x));
       setDlProspects(d=>d.map(x=>x.id===p.id?{...upd,_userId:x._userId,_ownerName:x._ownerName}:x));
       setSel(s=>s&&s.id===p.id?upd:s);
@@ -848,11 +859,12 @@ export default function App() {
   }
 
   async function salvaNoteGrid(p, note) {
-    if (p._userId && p._userId !== auth.userId) return;
+    if (!puoModificareGriglia(p)) return;
     if ((p.note||"") === (note||"")) return; // niente scrittura se non e' cambiato nulla
     const upd = {...p, note};
+    const ownerId = p._userId || auth.userId;
     try {
-      await sbUpdate(auth.token, p.id, toDB(upd, auth.userId));
+      await sbUpdate(auth.token, p.id, toDB(upd, ownerId));
       setData(d=>d.map(x=>x.id===p.id?upd:x));
       setDlProspects(d=>d.map(x=>x.id===p.id?{...upd,_userId:x._userId,_ownerName:x._ownerName}:x));
       setSel(s=>s&&s.id===p.id?upd:s);

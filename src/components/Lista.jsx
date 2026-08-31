@@ -146,7 +146,7 @@ function CellaFase({ p, fase, attiva, editabile, onToggle, cellStyle }) {
         disabled={!editabile}
         aria-pressed={attiva}
         aria-label={FASE_LABEL[fase] + " " + (p.nome || "")}
-        title={editabile ? FASE_LABEL[fase] : "Prospect di un altro membro"}
+        title={editabile ? FASE_LABEL[fase] : "Prospect di un altro membro: apri il dettaglio"}
         style={{
           width: 18, height: 18, padding: 0, margin: "10px auto", display: "block",
           borderRadius: 5, cursor: editabile ? "pointer" : "default",
@@ -324,7 +324,7 @@ export function Lista({ prospects, total, search, setSearch, fFase, setFFase, fF
             </thead>
             <tbody>{prospects.map(p=>(
               <RigaGriglia key={p.id} p={p} listaMode={listaMode}
-                editabile={!p._userId || p._userId===auth?.userId}
+                editabile={!p._userId || p._userId===auth?.userId || !!auth?.profile?.is_leader}
                 onOpen={onOpen} onToggleFase={onToggleFase} onSaveNote={onSaveNote} />
             ))}</tbody>
           </table>
