@@ -1215,8 +1215,14 @@ export default function App() {
   const FASI_ORDER_ALL = [...FASI_FUNNEL, ...FASI_SPECIALI];
   const listaDataSorted = [...listaData].sort((a,b)=>{
     if (sortBy==="fase") {
-      const ai = FASI_ORDER_ALL.indexOf(a.fase);
-      const bi = FASI_ORDER_ALL.indexOf(b.fase);
+      // Ordine funnel invertito: ISCRITTO (più avanti) in cima, INVITO in fondo.
+      // Le fasi speciali (indice >= FASI_FUNNEL.length in FASI_ORDER_ALL) restano
+      // sempre dopo il funnel, sia in ordine normale che invertito: per questo si
+      // usa un indice "fuori scala" fisso invece di invertire anche la loro posizione.
+      const rawA = FASI_ORDER_ALL.indexOf(a.fase);
+      const rawB = FASI_ORDER_ALL.indexOf(b.fase);
+      const ai = rawA < FASI_FUNNEL.length ? (FASI_FUNNEL.length - 1 - rawA) : FASI_FUNNEL.length + rawA;
+      const bi = rawB < FASI_FUNNEL.length ? (FASI_FUNNEL.length - 1 - rawB) : FASI_FUNNEL.length + rawB;
       if (ai !== bi) return ai - bi;
       return (b.conosciutoAt||"").localeCompare(a.conosciutoAt||"");
     }
