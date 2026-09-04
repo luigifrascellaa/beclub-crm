@@ -22,8 +22,14 @@ function progressPercent(p) {
   return pct;
 }
 
+const FLAG_DEFS = [
+  { key: "acconto", label: "Acconto" },
+  { key: "hotel", label: "Hotel" },
+  { key: "saldo", label: "Saldo" },
+];
+
 // ===== card persona (in ballo o venduto) =====
-function PersonaCard({ p, ownerName, showOwner, onClick, onMarkSold, squadraLabel }) {
+function PersonaCard({ p, ownerName, showOwner, onClick, onMarkSold, squadraLabel, onToggleFlag }) {
   const showProgress = p.stato === "venduto";
   const pct = showProgress ? progressPercent(p) : 0;
   const barColor = pct >= 100 ? "#10b981" : pct >= 50 ? "#f59e0b" : "#ef4444";
@@ -67,6 +73,17 @@ function PersonaCard({ p, ownerName, showOwner, onClick, onMarkSold, squadraLabe
           <div style={{ height: 5, background: "var(--bg4)", borderRadius: 99, overflow: "hidden" }}>
             <div style={{ height: "100%", width: pct + "%", background: barColor, borderRadius: 99, transition: "width .3s ease" }} />
           </div>
+          {onToggleFlag && (
+            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+              {FLAG_DEFS.map(({ key, label }) => (
+                <label key={key} onClick={e => e.stopPropagation()}
+                  style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 7, border: "1px solid " + (p[key] ? "#10b98150" : "var(--border2)"), background: p[key] ? "#10b98115" : "var(--bg4)", cursor: "pointer", fontSize: 10, fontWeight: 700, color: p[key] ? "#10b981" : "var(--muted)" }}>
+                  <input type="checkbox" checked={!!p[key]} onChange={() => onToggleFlag(key)} style={{ width: 11, height: 11, margin: 0 }} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -545,7 +562,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
           {/* In ballo + venduti */}
           {evCorrente && (
             <>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 3fr", gap: 16 }}>
               <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                   <div style={{ fontSize: 12, fontWeight: 800, color: "#f59e0b" }}>
@@ -618,7 +635,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
                 <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 420, overflowY: "auto" }}>
                   {vendutiVisibili.length === 0
                     ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>Nessun ticket venduto ancora</div>
-                    : vendutiVisibili.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner squadraLabel={squadraOf[p.id]} onClick={() => canEdit(p) && setModal({ persona: p })} />)
+                    : vendutiVisibili.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner squadraLabel={squadraOf[p.id]} onClick={() => canEdit(p) && setModal({ persona: p })} onToggleFlag={canEdit(p) ? (key) => salvaPersona({ ...p, [key]: !p[key] }) : null} />)
                   }
                 </div>
               </div>
@@ -661,7 +678,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
                             <div style={{ padding: "0 13px 13px 13px", display: "flex", flexDirection: "column", gap: 6 }}>
                               {x.buyers.length === 0
                                 ? <div style={{ fontSize: 11, color: "var(--border2)", padding: "6px 0" }}>Nessun ticket venduto in questa downline</div>
-                                : x.buyers.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner onClick={() => canEdit(p) && setModal({ persona: p })} />)
+                                : x.buyers.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner onClick={() => canEdit(p) && setModal({ persona: p })} onToggleFlag={canEdit(p) ? (key) => salvaPersona({ ...p, [key]: !p[key] }) : null} />)
                               }
                             </div>
                           )}
