@@ -266,6 +266,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   const [filtroVenduti, setFiltroVenduti] = useState("tutti"); // 'tutti' | 'team' | 'prospect'
   const [filtroMembro, setFiltroMembro] = useState(""); // "" = tutti i membri
   const [filtroSquadra, setFiltroSquadra] = useState(""); // "" | 'sinistra' | 'destra'
+  const [filtroCompletamento, setFiltroCompletamento] = useState(""); // "" | '0' | 'parziale' | '100'
   // filtri della colonna "In ballo": tenuti separati da quelli dei venduti perche'
   // rispondono a domande diverse (chi devo ancora chiudere, vs chi ha gia' comprato)
   const [ibOrigine, setIbOrigine] = useState("tutti"); // 'tutti' | 'personali' | 'team'
@@ -366,12 +367,24 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   const vendutiSinistra = useMemo(() => venduti.filter(p => squadraOf[p.id] === "sinistra"), [venduti, squadraOf]);
   const vendutiDestra    = useMemo(() => venduti.filter(p => squadraOf[p.id] === "destra"), [venduti, squadraOf]);
 
-  // lista finale mostrata sotto le card Sinistra/Destra: filtrata per squadra (se scelta) e ordinata per % completamento crescente
+  // lista finale mostrata sotto le card Sinistra/Destra: filtrata per squadra e per
+  // completamento (se scelti) e ordinata per % completamento crescente.
+  // Nota: questi due filtri agiscono SOLO sulla lista, non su `venduti`, quindi il
+  // totale e i contatori Sinistra/Destra restano il denominatore di riferimento
+  // mentre si guarda un sottoinsieme.
   const vendutiVisibili = useMemo(() =>
     venduti
       .filter(p => !filtroSquadra || squadraOf[p.id] === filtroSquadra)
+      .filter(p => {
+        if (!filtroCompletamento) return true;
+        const pct = progressPercent(p);
+        if (filtroCompletamento === "0") return pct === 0;
+        if (filtroCompletamento === "100") return pct === 100;
+        if (filtroCompletamento === "parziale") return pct > 0 && pct < 100;
+        return true;
+      })
       .sort((a, b) => progressPercent(a) - progressPercent(b)),
-    [venduti, squadraOf, filtroSquadra]
+    [venduti, squadraOf, filtroSquadra, filtroCompletamento]
   );
 
   // un leader (o Dimitri) puo' modificare l'anagrafica di chiunque nella propria downline
@@ -604,7 +617,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#10b981", textTransform: "uppercase", letterSpacing: .6 }}>Ticket venduti</div>
                     <div style={{ fontSize: 30, fontWeight: 900, color: "#10b981", lineHeight: 1.1 }}>{venduti.length}</div>
                   </div>
-                  <div style={{ display: "flex", gap: 6 }}>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                     <select value={filtroMembro} onChange={e => setFiltroMembro(e.target.value)} style={{ width: "auto", minWidth: 130, fontSize: 12 }}>
                       <option value="">Tutti i membri</option>
                       <option value={auth.userId}>Solo i miei</option>
@@ -620,6 +633,12 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
                       <option value="sinistra">Solo sinistra</option>
                       <option value="destra">Solo destra</option>
                     </select>
+                    <select value={filtroCompletamento} onChange={e => setFiltroCompletamento(e.target.value)} style={{ width: "auto", minWidth: 130, fontSize: 12 }}>
+                      <option value="">Tutti i completamenti</option>
+                      <option value="0">Non iniziati (0%)</option>
+                      <option value="parziale">In corso (1-99%)</option>
+                      <option value="100">Completi (100%)</option>
+                    </select>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -634,7 +653,9 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 420, overflowY: "auto" }}>
                   {vendutiVisibili.length === 0
-                    ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>Nessun ticket venduto ancora</div>
+                    ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>
+                        {venduti.length === 0 ? "Nessun ticket venduto ancora" : "Nessuno con questi filtri"}
+                      </div>
                     : vendutiVisibili.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner squadraLabel={squadraOf[p.id]} onClick={() => canEdit(p) && setModal({ persona: p })} onToggleFlag={canEdit(p) ? (key) => salvaPersona({ ...p, [key]: !p[key] }) : null} />)
                   }
                 </div>
