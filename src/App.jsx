@@ -1358,8 +1358,13 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
   ];
   return (
     <aside className={"sb"+(drawerOpen?" drawer-open":"")} style={{width:222,minWidth:222,background:"var(--bg2)",borderRight:"1px solid #11203a",padding:"1.5rem .9rem",display:"flex",flexDirection:"column",gap:4,height:"100vh",overflowY:"auto"}}>
-      <div style={{marginBottom:14,paddingLeft:4,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div style={{fontWeight:900,fontSize:15,color:"var(--text)",lineHeight:1.2}}>Kairos CRM</div>
+      <div style={{marginBottom:14,paddingLeft:4,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+        <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+          <div style={{width:30,height:30,borderRadius:"50%",flexShrink:0,background:"var(--bg3)",border:"1px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:2}}>
+            <img src="/kairos-logo.png" alt="Kairos" style={{width:"100%",height:"100%",objectFit:"contain",display:"block"}} />
+          </div>
+          <div style={{fontWeight:900,fontSize:15,color:"var(--text)",lineHeight:1.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Kairos CRM</div>
+        </div>
         <button className="hamburger-btn" onClick={onCloseDrawer} aria-label="Chiudi menu"
           style={{width:26,height:26,borderRadius:7,background:"var(--bg3)",border:"1px solid var(--border)",color:"var(--muted)",fontSize:13,cursor:"pointer",alignItems:"center",justifyContent:"center"}}>
           &#10005;
