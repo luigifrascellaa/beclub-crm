@@ -340,6 +340,10 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   const [filtroVenduti, setFiltroVenduti] = useState("tutti"); // 'tutti' | 'team' | 'prospect'
   const [filtroMembro, setFiltroMembro] = useState(""); // "" = tutti i membri
   const [filtroSquadra, setFiltroSquadra] = useState(""); // "" | 'sinistra' | 'destra'
+  // filtro sul completamento: valori sul CONTEGGIO dei flag ('0'|'1'|'2'|'3'), piu'
+  // 'in_forse'. Sono le stesse soglie che decidono il colore della riga, cosi'
+  // filtrare equivale a "mostrami solo le righe di questo colore".
+  const [filtroFlag, setFiltroFlag] = useState(""); // "" | '0' | '1' | '2' | '3' | 'in_forse'
   // filtri della colonna "In ballo": tenuti separati da quelli dei venduti perche'
   // rispondono a domande diverse (chi devo ancora chiudere, vs chi ha gia' comprato)
   const [ibOrigine, setIbOrigine] = useState("tutti"); // 'tutti' | 'personali' | 'team'
@@ -412,15 +416,23 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   const vendutiSinistra = useMemo(() => vendutiReali.filter(p => squadraOf[p.id] === "sinistra"), [vendutiReali, squadraOf]);
   const vendutiDestra    = useMemo(() => vendutiReali.filter(p => squadraOf[p.id] === "destra"), [vendutiReali, squadraOf]);
 
-  // righe della griglia: filtrate per squadra e ordinate per completamento crescente,
-  // cosi' chi va rincorso sta in cima. Il filtro squadra agisce SOLO sulla lista, non
-  // su `venduti`, quindi il totale e i contatori Sinistra/Destra restano il
-  // denominatore di riferimento mentre si guarda un sottoinsieme.
+  // righe della griglia: filtrate per squadra e completamento, ordinate per
+  // completamento crescente cosi' chi va rincorso sta in cima. Questi filtri agiscono
+  // SOLO sulla lista, non su `venduti`, quindi il totale e i contatori Sinistra/Destra
+  // restano il denominatore di riferimento mentre si guarda un sottoinsieme.
   const vendutiVisibili = useMemo(() =>
     venduti
       .filter(p => !filtroSquadra || squadraOf[p.id] === filtroSquadra)
+      .filter(p => {
+        if (!filtroFlag) return true;
+        if (filtroFlag === "in_forse") return !!p.in_forse;
+        // un "in forse" e' grigio a prescindere dai flag che ha: se comparisse anche
+        // sotto "2 flag" il filtro direbbe una cosa e il colore un'altra
+        if (p.in_forse) return false;
+        return flagCount(p) === Number(filtroFlag);
+      })
       .sort((a, b) => flagCount(a) - flagCount(b)),
-    [venduti, squadraOf, filtroSquadra]
+    [venduti, squadraOf, filtroSquadra, filtroFlag]
   );
 
   // un leader (o Dimitri) puo' modificare l'anagrafica di chiunque nella propria downline
@@ -644,6 +656,14 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
                     <option value="">Tutte le squadre</option>
                     <option value="sinistra">Solo sinistra</option>
                     <option value="destra">Solo destra</option>
+                  </select>
+                  <select value={filtroFlag} onChange={e => setFiltroFlag(e.target.value)} style={{ width: "auto", minWidth: 150, fontSize: 12 }}>
+                    <option value="">Tutti i completamenti</option>
+                    <option value="0">Nessun flag</option>
+                    <option value="1">1 flag {"\u00b7"} giallo</option>
+                    <option value="2">2 flag {"\u00b7"} verde chiaro</option>
+                    <option value="3">Completi {"\u00b7"} verde scuro</option>
+                    <option value="in_forse">In forse {"\u00b7"} grigio</option>
                   </select>
                 </div>
               </div>
