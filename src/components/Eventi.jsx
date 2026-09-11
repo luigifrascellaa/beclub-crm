@@ -1,38 +1,43 @@
 import { useState, useEffect, useMemo } from "react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from "recharts";
-
-function Av({ n, c, color = "var(--a1)", size = 34 }) {
-  return (
-    <div style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, background: "linear-gradient(135deg," + color + "," + color + "99)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, fontSize: size * 0.32, boxShadow: "0 0 10px " + color + "35" }}>
-      {(n || "?")[0]}{(c || "")[0]}
-    </div>
-  );
-}
+import { Av } from "../shared";
 
 function fmtDate(d) {
   if (!d) return "\u2014";
   return new Date(d + "T12:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function progressPercent(p) {
-  let pct = 0;
-  if (p.acconto) pct += 50;
-  if (p.hotel) pct += 25;
-  if (p.saldo) pct += 25;
-  return pct;
+// Quanti dei tre flag di completamento sono spuntati. "in_forse" NON entra qui:
+// non e' un pezzo di pagamento, e' uno stato che sospende il giudizio sul ticket.
+function flagCount(p) {
+  return (p.acconto ? 1 : 0) + (p.hotel ? 1 : 0) + (p.saldo ? 1 : 0);
+}
+
+// Colore della riga. Stessa scala della griglia prospect (giallo -> menta -> verde
+// bosco) perche' risponde alla stessa domanda: "a che punto e' questa persona".
+// I due verdi si separano sulla LUMINOSITA', non sulla tinta — su fondo scuro
+// scurire un colore lo fa sparire, per questo il verde intermedio e' un menta acceso.
+// "in_forse" vince su tutto: un ticket in dubbio non deve sembrare avanzato.
+function coloreTicket(p) {
+  if (p.in_forse) return "#6b7280";
+  const n = flagCount(p);
+  if (n >= 3) return "#15803d";
+  if (n === 2) return "#86efac";
+  if (n === 1) return "#eab308";
+  return null;
 }
 
 const FLAG_DEFS = [
-  { key: "acconto", label: "Acconto" },
-  { key: "hotel", label: "Hotel" },
-  { key: "saldo", label: "Saldo" },
+  { key: "acconto", label: "Acconto", clr: "#10b981" },
+  { key: "hotel", label: "Hotel", clr: "#10b981" },
+  { key: "saldo", label: "Saldo", clr: "#10b981" },
+  { key: "in_forse", label: "In forse", clr: "#6b7280" },
 ];
 
-// ===== card persona (in ballo o venduto) =====
-function PersonaCard({ p, ownerName, showOwner, onClick, onMarkSold, squadraLabel, onToggleFlag }) {
-  const showProgress = p.stato === "venduto";
-  const pct = showProgress ? progressPercent(p) : 0;
-  const barColor = pct >= 100 ? "#10b981" : pct >= 50 ? "#f59e0b" : "#ef4444";
+// ===== card persona — usata SOLO dalla colonna "In ballo".
+// I ticket venduti sono passati alla griglia (RigaTicket): qui non servono piu'
+// ne' la barra di completamento ne' i flag, che su un "in ballo" non esistono. =====
+function PersonaCard({ p, ownerName, showOwner, onClick, onMarkSold, squadraLabel }) {
   return (
     <div onClick={onClick} className="hrow" style={{ display: "flex", flexDirection: "column", gap: 7, padding: "9px 12px", borderRadius: 10, cursor: onClick ? "pointer" : "default", border: "1px solid var(--border)", background: "var(--bg3)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -64,29 +69,110 @@ function PersonaCard({ p, ownerName, showOwner, onClick, onMarkSold, squadraLabe
           </div>
         )}
       </div>
-      {showProgress && (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-            <span style={{ fontSize: 9, color: "var(--muted)", textTransform: "uppercase", letterSpacing: .4 }}>Completamento evento</span>
-            <span style={{ fontSize: 9, fontWeight: 800, color: barColor }}>{pct}%</span>
-          </div>
-          <div style={{ height: 5, background: "var(--bg4)", borderRadius: 99, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: pct + "%", background: barColor, borderRadius: 99, transition: "width .3s ease" }} />
-          </div>
-          {onToggleFlag && (
-            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-              {FLAG_DEFS.map(({ key, label }) => (
-                <label key={key} onClick={e => e.stopPropagation()}
-                  style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 7, border: "1px solid " + (p[key] ? "#10b98150" : "var(--border2)"), background: p[key] ? "#10b98115" : "var(--bg4)", cursor: "pointer", fontSize: 10, fontWeight: 700, color: p[key] ? "#10b981" : "var(--muted)" }}>
-                  <input type="checkbox" checked={!!p[key]} onChange={() => onToggleFlag(key)} style={{ width: 11, height: 11, margin: 0 }} />
-                  {label}
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
+  );
+}
+
+// ===== griglia ticket venduti (stesso pattern della griglia prospect in Lista.jsx) =====
+// Niente <input type="checkbox">: il controllo nativo di macOS e' un rettangolo
+// bianco pieno, cioe' la cosa piu' luminosa in una UI scura — il vuoto griderebbe
+// piu' del pieno. Il non-fatto e' un contorno appena percepibile, il fatto e'
+// l'unica cosa colorata.
+function CellaFlag({ p, flag, attivo, editabile, onToggle, cellStyle }) {
+  return (
+    <td style={{ ...cellStyle, padding: 0, textAlign: "center" }}>
+      <button
+        type="button"
+        onClick={() => editabile && onToggle(p, flag.key)}
+        disabled={!editabile}
+        aria-pressed={attivo}
+        aria-label={flag.label + " " + (p.nome || "")}
+        title={editabile ? flag.label : "Ticket di un altro membro: apri il dettaglio"}
+        style={{
+          width: 18, height: 18, padding: 0, margin: "10px auto", display: "block",
+          borderRadius: 5, cursor: editabile ? "pointer" : "default",
+          background: attivo ? flag.clr : "transparent",
+          border: "1px solid " + (attivo ? flag.clr : "var(--border2)"),
+          opacity: editabile ? 1 : .4,
+          transition: "background .12s ease, border-color .12s ease",
+          position: "relative",
+        }}
+      >
+        {attivo && (
+          <svg viewBox="0 0 16 16" width="11" height="11" style={{ position: "absolute", top: 2, left: 2 }} aria-hidden="true">
+            <path d="M3 8.5l3.2 3.2L13 5" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </button>
+    </td>
+  );
+}
+
+// Riga della griglia. Componente separato perche' la nota ha uno stato locale
+// (si scrive liberamente e si salva sull'uscita dal campo): tenerlo nel padre
+// farebbe ripartire un render dell'intera lista a ogni carattere digitato.
+function RigaTicket({ p, ownerName, squadraLabel, editabile, onOpen, onToggleFlag, onSaveNote }) {
+  const [nota, setNota] = useState(p.note || "");
+  const [notaAttiva, setNotaAttiva] = useState(false);
+  useEffect(() => { setNota(p.note || ""); }, [p.id, p.note]);
+  const base = coloreTicket(p);
+
+  // Il colore sta concentrato a sinistra, non spalmato sulla riga: una striscia
+  // larga tinta di colore saturo diventa un banner di avviso, non un dato. La
+  // sfumatura sta SOLO nella cella del nome — applicata a ogni <td> ripartirebbe
+  // da capo in ognuna, a bande.
+  const cellStyle = { borderTop: "1px solid #0d1b3355", borderBottom: "1px solid #0d1b3355" };
+
+  return (
+    <tr>
+      <td style={{
+        ...cellStyle, padding: "6px 14px 6px 11px", position: "sticky", left: 0, zIndex: 1,
+        // 5px e non 3: e' l'unico punto in cui il colore sta al 100%, ed e' li' che
+        // due verdi vicini si distinguono davvero.
+        borderLeft: "5px solid " + (base || "var(--border2)"),
+        backgroundColor: "var(--bg2)",
+        backgroundImage: base ? "linear-gradient(90deg," + base + "2e, transparent)" : "none",
+      }}>
+        <div onClick={() => onOpen(p)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", minWidth: 180 }}>
+          <Av n={p.nome} c={p.cognome} color={base || "var(--border2)"} size={32} soft />
+          <div style={{ overflow: "hidden", lineHeight: 1.25 }}>
+            <div style={{ color: "var(--text)", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>{p.nome} {p.cognome || ""}</div>
+            {p.citta && <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1 }}>{p.citta}</div>}
+          </div>
+        </div>
+      </td>
+      <td style={{ ...cellStyle, padding: "6px 10px" }}>
+        <span style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap" }}>{ownerName || "\u2014"}</span>
+      </td>
+      <td style={{ ...cellStyle, padding: "6px 10px", textAlign: "center" }}>
+        {squadraLabel
+          ? <span style={{ fontSize: 10, fontWeight: 800, color: squadraLabel === "sinistra" ? "var(--a2)" : "#10b981", background: squadraLabel === "sinistra" ? "var(--a1-13)" : "#10b98118", border: "1px solid " + (squadraLabel === "sinistra" ? "var(--a1-25)" : "#10b98130"), borderRadius: 7, padding: "3px 8px", whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: .4 }}>
+              {squadraLabel === "sinistra" ? "Sx" : "Dx"}
+            </span>
+          : <span style={{ fontSize: 11, color: "var(--border2)" }}>{"\u2014"}</span>
+        }
+      </td>
+      {FLAG_DEFS.map(f => (
+        <CellaFlag key={f.key} p={p} flag={f} attivo={!!p[f.key]} editabile={editabile} onToggle={onToggleFlag} cellStyle={cellStyle} />
+      ))}
+      <td style={{ ...cellStyle, padding: "4px 8px 4px 16px", minWidth: 220 }}>
+        <input
+          value={nota} disabled={!editabile}
+          onChange={e => setNota(e.target.value)}
+          onFocus={() => setNotaAttiva(true)}
+          onBlur={() => { setNotaAttiva(false); onSaveNote(p, nota); }}
+          onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+          placeholder={editabile && notaAttiva ? "Scrivi una nota" : ""}
+          style={{
+            width: "100%", background: notaAttiva ? "var(--bg3)" : "transparent",
+            border: "1px solid " + (notaAttiva ? "var(--border2)" : "transparent"),
+            borderRadius: 7, padding: "5px 9px", color: nota ? "var(--text)" : "var(--muted)",
+            fontSize: 12, fontFamily: "inherit", transition: "background .12s ease, border-color .12s ease",
+          }}
+        />
+      </td>
+      <td style={{ ...cellStyle, padding: "6px 14px 6px 0", color: "var(--border2)", fontSize: 15, cursor: "pointer" }} onClick={() => onOpen(p)}>{"\u203a"}</td>
+    </tr>
   );
 }
 
@@ -142,21 +228,19 @@ function PersonaModal({ persona, defaultStato, onSave, onClose, onDelete, auth, 
           <>
             <div style={{ gridColumn: "1/-1" }}><label style={lbl}>Sponsor del ticket</label><input value={form.sponsor || ""} onChange={e => setForm(f => ({ ...f, sponsor: e.target.value }))} placeholder="Chi ha sponsorizzato" /></div>
             <div style={{ gridColumn: "1/-1" }}>
-              <label style={lbl}>Completamento evento</label>
+              <label style={lbl}>Stato ticket</label>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {[
-                  { key: "acconto", label: "Acconto (50%)" },
-                  { key: "hotel", label: "Hotel (25%)" },
-                  { key: "saldo", label: "Saldo finale (25%)" },
-                ].map(({ key, label }) => (
-                  <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 11px", borderRadius: 9, border: "1px solid " + (form[key] ? "#10b98150" : "var(--border2)"), background: form[key] ? "#10b98115" : "var(--bg3)", cursor: "pointer", fontSize: 12, color: form[key] ? "#10b981" : "var(--muted)", fontWeight: 700 }}>
+                {FLAG_DEFS.map(({ key, label, clr }) => (
+                  <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 11px", borderRadius: 9, border: "1px solid " + (form[key] ? clr + "50" : "var(--border2)"), background: form[key] ? clr + "15" : "var(--bg3)", cursor: "pointer", fontSize: 12, color: form[key] ? clr : "var(--muted)", fontWeight: 700 }}>
                     <input type="checkbox" checked={!!form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.checked }))} style={{ width: "auto", margin: 0 }} />
                     {label}
                   </label>
                 ))}
               </div>
-              <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, color: progressPercent(form) >= 100 ? "#10b981" : "var(--a2)" }}>
-                {progressPercent(form)}% completato
+              <div style={{ marginTop: 8, fontSize: 11, color: "var(--muted)", lineHeight: 1.4 }}>
+                {form.in_forse
+                  ? "Segnato in forse: il ticket resta in elenco ma non viene contato nei totali."
+                  : flagCount(form) + " di 3 completati" + (flagCount(form) >= 3 ? " \u00b7 ticket intero" : "")}
               </div>
             </div>
           </>
@@ -243,16 +327,6 @@ function getSquadraRelativeTo(rootId, memberId, allProfiles, positions, cache) {
   cache[memberId] = result;
   return result;
 }
-// Verifica se memberId e' un discendente di rootId (risalendo positioned_under)
-function isDescendantOf(rootId, memberId, allProfiles, depth) {
-  if (memberId === rootId) return true;
-  if ((depth || 0) > 40) return false;
-  const member = (allProfiles || []).find(p => p.id === memberId);
-  if (!member || !member.positioned_under) return false;
-  if (member.positioned_under === rootId) return true;
-  return isDescendantOf(rootId, member.positioned_under, allProfiles, (depth || 0) + 1);
-}
-
 export function EventiView({ auth, allProfiles, downline, positions, showToast,
   sbListEventi,
   sbListEventoPersone, sbInsertEventoPersona, sbUpdateEventoPersona, sbDeleteEventoPersona,
@@ -266,14 +340,10 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   const [filtroVenduti, setFiltroVenduti] = useState("tutti"); // 'tutti' | 'team' | 'prospect'
   const [filtroMembro, setFiltroMembro] = useState(""); // "" = tutti i membri
   const [filtroSquadra, setFiltroSquadra] = useState(""); // "" | 'sinistra' | 'destra'
-  const [filtroCompletamento, setFiltroCompletamento] = useState(""); // "" | '0' | 'parziale' | '100'
   // filtri della colonna "In ballo": tenuti separati da quelli dei venduti perche'
   // rispondono a domande diverse (chi devo ancora chiudere, vs chi ha gia' comprato)
   const [ibOrigine, setIbOrigine] = useState("tutti"); // 'tutti' | 'personali' | 'team'
   const [ibSquadra, setIbSquadra] = useState("");      // "" | 'sinistra' | 'destra'
-  const [membroEspanso, setMembroEspanso] = useState(null);
-  const [cercaMembro, setCercaMembro] = useState("");
-  const [soloLeader, setSoloLeader] = useState(false);
 
   useEffect(() => {
     if (!auth) return;
@@ -334,57 +404,23 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
     [inBallo, ibOrigine, ibSquadra, squadraOf, auth.userId]
   );
 
-  // per ogni membro della downline: ticket personali, della sua downline sinistra/destra, e totale
-  const membriBreakdown = useMemo(() => {
-    const vendutiTeamPersonali = persone.filter(p => p.stato === "venduto" && myTeamIds.has(p.user_id));
-    return downline.map(m => {
-      const cache = {};
-      let personali = 0, sinistra = 0, destra = 0;
-      vendutiTeamPersonali.forEach(p => {
-        if (p.user_id === m.id) { personali++; return; }
-        if (!isDescendantOf(m.id, p.user_id, allProfiles)) return;
-        const sq = getSquadraRelativeTo(m.id, p.user_id, allProfiles, positions, cache);
-        if (sq === "sinistra") sinistra++;
-        else if (sq === "destra") destra++;
-      });
-      const buyers = vendutiTeamPersonali.filter(p => p.user_id === m.id || isDescendantOf(m.id, p.user_id, allProfiles));
-      return { membro: m, personali, sinistra, destra, totale: personali + sinistra + destra, buyers };
-    }).sort((a, b) => b.totale - a.totale);
-  }, [downline, persone, myTeamIds, allProfiles, positions]);
+  // I ticket "in forse" restano SEMPRE in elenco ma non entrano in nessun conteggio:
+  // e' la stessa regola del resto del CRM (escluso dai CALCOLI, mai dalle LISTE).
+  const vendutiReali = useMemo(() => venduti.filter(p => !p.in_forse), [venduti]);
+  const inForseCount = venduti.length - vendutiReali.length;
 
-  const membriBreakdownFiltrati = useMemo(() => {
-    const q = cercaMembro.trim().toLowerCase();
-    return membriBreakdown.filter(x => {
-      if (soloLeader && !x.membro.is_leader) return false;
-      if (q) {
-        const nomeCompleto = ((x.membro.nome || "") + " " + (x.membro.cognome || "")).toLowerCase();
-        if (!nomeCompleto.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [membriBreakdown, cercaMembro, soloLeader]);
+  const vendutiSinistra = useMemo(() => vendutiReali.filter(p => squadraOf[p.id] === "sinistra"), [vendutiReali, squadraOf]);
+  const vendutiDestra    = useMemo(() => vendutiReali.filter(p => squadraOf[p.id] === "destra"), [vendutiReali, squadraOf]);
 
-  const vendutiSinistra = useMemo(() => venduti.filter(p => squadraOf[p.id] === "sinistra"), [venduti, squadraOf]);
-  const vendutiDestra    = useMemo(() => venduti.filter(p => squadraOf[p.id] === "destra"), [venduti, squadraOf]);
-
-  // lista finale mostrata sotto le card Sinistra/Destra: filtrata per squadra e per
-  // completamento (se scelti) e ordinata per % completamento crescente.
-  // Nota: questi due filtri agiscono SOLO sulla lista, non su `venduti`, quindi il
-  // totale e i contatori Sinistra/Destra restano il denominatore di riferimento
-  // mentre si guarda un sottoinsieme.
+  // righe della griglia: filtrate per squadra e ordinate per completamento crescente,
+  // cosi' chi va rincorso sta in cima. Il filtro squadra agisce SOLO sulla lista, non
+  // su `venduti`, quindi il totale e i contatori Sinistra/Destra restano il
+  // denominatore di riferimento mentre si guarda un sottoinsieme.
   const vendutiVisibili = useMemo(() =>
     venduti
       .filter(p => !filtroSquadra || squadraOf[p.id] === filtroSquadra)
-      .filter(p => {
-        if (!filtroCompletamento) return true;
-        const pct = progressPercent(p);
-        if (filtroCompletamento === "0") return pct === 0;
-        if (filtroCompletamento === "100") return pct === 100;
-        if (filtroCompletamento === "parziale") return pct > 0 && pct < 100;
-        return true;
-      })
-      .sort((a, b) => progressPercent(a) - progressPercent(b)),
-    [venduti, squadraOf, filtroSquadra, filtroCompletamento]
+      .sort((a, b) => flagCount(a) - flagCount(b)),
+    [venduti, squadraOf, filtroSquadra]
   );
 
   // un leader (o Dimitri) puo' modificare l'anagrafica di chiunque nella propria downline
@@ -463,16 +499,20 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
     // continuerebbe a spostare la persona in una gamba
     const categoria = form.categoria || "team";
     const squadraManuale = categoria === "team" ? (form.squadra_manuale || null) : null;
+    // venduto_at = quando e' stato dato il SALDO, cioe' quando il ticket e' stato
+    // preso intero. Va preservata se c'e' gia', altrimenti ogni salvataggio la
+    // riscriverebbe a "adesso" e la data reale della vendita andrebbe persa.
+    const vendutoAt = form.saldo ? (form.venduto_at || new Date().toISOString()) : null;
     try {
       if (form.id) {
         await sbUpdateEventoPersona(auth.token, form.id, {
           nome: form.nome, cognome: form.cognome || null, telefono: form.telefono || null,
           instagram: form.instagram || null, citta: form.citta || null, note: form.note || null,
           categoria, sponsor: form.sponsor || null, squadra_manuale: squadraManuale,
-          acconto: !!form.acconto, hotel: !!form.hotel, saldo: !!form.saldo,
-          stato: form.stato, venduto_at: form.stato === "venduto" ? new Date().toISOString() : null,
+          acconto: !!form.acconto, hotel: !!form.hotel, saldo: !!form.saldo, in_forse: !!form.in_forse,
+          stato: form.stato, venduto_at: vendutoAt,
         });
-        const aggiornata = { ...form, categoria, squadra_manuale: squadraManuale };
+        const aggiornata = { ...form, categoria, squadra_manuale: squadraManuale, venduto_at: vendutoAt };
         setPersone(ps => ps.map(p => p.id === form.id ? { ...p, ...aggiornata } : p));
         setTuttiVenduti(tv => {
           const senzaQuesta = tv.filter(p => p.id !== form.id);
@@ -486,8 +526,8 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
           nome: form.nome, cognome: form.cognome || null, telefono: form.telefono || null,
           instagram: form.instagram || null, citta: form.citta || null, note: form.note || null,
           categoria, sponsor: form.sponsor || null, squadra_manuale: squadraManuale,
-          acconto: !!form.acconto, hotel: !!form.hotel, saldo: !!form.saldo,
-          stato: form.stato || "in_ballo",
+          acconto: !!form.acconto, hotel: !!form.hotel, saldo: !!form.saldo, in_forse: !!form.in_forse,
+          stato: form.stato || "in_ballo", venduto_at: vendutoAt,
         });
         const created = Array.isArray(row) ? row[0] : row;
         setPersone(ps => [...ps, created]);
@@ -496,6 +536,35 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
       }
     } catch (e) { showToast("Errore: " + e.message, "#ef4444"); }
     setModal(null);
+  }
+
+  // Spunta di un singolo flag dalla griglia. PATCH mirato di quel solo campo e non
+  // riscrittura dell'intero record: in una griglia si clicca molto, e far passare
+  // ogni spunta da salvaPersona riscriverebbe ogni volta tutta l'anagrafica (e
+  // sparerebbe un toast per click).
+  // `persone` e `tuttiVenduti` contengono entrambi la riga e vanno aggiornati
+  // insieme, altrimenti la griglia si aggiorna e leaderboard/grafico restano indietro.
+  async function toggleFlag(p, key) {
+    const val = !p[key];
+    const patch = { [key]: val };
+    if (key === "saldo") patch.venduto_at = val ? (p.venduto_at || new Date().toISOString()) : null;
+    try {
+      await sbUpdateEventoPersona(auth.token, p.id, patch);
+      setPersone(ps => ps.map(x => x.id === p.id ? { ...x, ...patch } : x));
+      setTuttiVenduti(tv => tv.map(x => x.id === p.id ? { ...x, ...patch } : x));
+    } catch (e) { showToast("Errore: " + e.message, "#ef4444"); }
+  }
+
+  // Nota in linea: salvata all'uscita dal campo, con guardia che evita la scrittura
+  // se il testo non e' cambiato.
+  async function salvaNota(p, nota) {
+    const nuova = nota || null;
+    if ((p.note || null) === nuova) return;
+    try {
+      await sbUpdateEventoPersona(auth.token, p.id, { note: nuova });
+      setPersone(ps => ps.map(x => x.id === p.id ? { ...x, note: nuova } : x));
+      setTuttiVenduti(tv => tv.map(x => x.id === p.id ? { ...x, note: nuova } : x));
+    } catch (e) { showToast("Errore: " + e.message, "#ef4444"); }
   }
 
   async function eliminaPersona(id) {
@@ -522,14 +591,6 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
         )}
       </div>
 
-      {/* Leaderboard */}
-      <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.6rem", marginBottom: 18 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 18, display: "flex", alignItems: "center", gap: 8 }}>
-          <span>{"\ud83c\udfc6"}</span> Leaderboard
-        </div>
-        <Leaderboard ranking={ranking} />
-      </div>
-
       {eventi.length === 0 && !loading ? (
         <div style={{ textAlign: "center", padding: "3rem", color: "var(--border2)" }}>
           Nessun evento disponibile al momento.
@@ -554,166 +615,155 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
             </div>
           )}
 
-          {/* Grafico andamento */}
-          <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.4rem", marginBottom: 18 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 14 }}>Andamento</div>
-            <div style={{ height: 220 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 5, right: 10, left: -15, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="nome" stroke="var(--muted)" fontSize={11} />
-                  <YAxis stroke="var(--muted)" fontSize={12} allowDecimals={false} />
-                  <Tooltip contentStyle={{ background: "var(--bg2)", border: "1px solid var(--border2)", borderRadius: 10, fontSize: 12 }} labelStyle={{ color: "var(--text)" }} />
-                  <Bar dataKey="venduti" name="Venduti" radius={[6, 6, 0, 0]} fill="var(--a1)">
-                    {chartData.map((_, i) => <Cell key={i} fill="var(--a1)" />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* In ballo + venduti */}
           {evCorrente && (
             <>
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 3fr", gap: 16 }}>
-              <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "#f59e0b" }}>
-                    In ballo {"\u00b7"} {inBalloVisibili.length}
-                    {inBalloVisibili.length !== inBallo.length && (
-                      <span style={{ color: "var(--muted)", fontWeight: 700 }}> {"/"} {inBallo.length}</span>
-                    )}
-                  </div>
-                  <button onClick={() => setModal({ persona: null, stato: "in_ballo" })}
-                    style={{ padding: "5px 12px", fontSize: 11, fontWeight: 800, background: "#f59e0b18", color: "#f59e0b", border: "1px solid #f59e0b40", borderRadius: 8, cursor: "pointer" }}>
-                    + Aggiungi
-                  </button>
+            {/* ===== 1. Ticket venduti — griglia ===== */}
+            <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 10, gap: 10, flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#10b981", textTransform: "uppercase", letterSpacing: .6 }}>Ticket venduti</div>
+                  <div style={{ fontSize: 30, fontWeight: 900, color: "#10b981", lineHeight: 1.1 }}>{vendutiReali.length}</div>
+                  {inForseCount > 0 && (
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
+                      + {inForseCount} in forse, non {inForseCount === 1 ? "conteggiato" : "conteggiati"}
+                    </div>
+                  )}
                 </div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-                  <select value={ibOrigine} onChange={e => setIbOrigine(e.target.value)} style={{ flex: "1 1 120px", minWidth: 120, fontSize: 12 }}>
-                    <option value="tutti">Tutti</option>
-                    <option value="personali">Personali</option>
-                    <option value="team">Team</option>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  <select value={filtroMembro} onChange={e => setFiltroMembro(e.target.value)} style={{ width: "auto", minWidth: 130, fontSize: 12 }}>
+                    <option value="">Tutti i membri</option>
+                    <option value={auth.userId}>Solo i miei</option>
+                    {downline.map(m => <option key={m.id} value={m.id}>{m.nome || ""} {m.cognome || ""}</option>)}
                   </select>
-                  <select value={ibSquadra} onChange={e => setIbSquadra(e.target.value)} style={{ flex: "1 1 120px", minWidth: 120, fontSize: 12 }}>
+                  <select value={filtroVenduti} onChange={e => setFiltroVenduti(e.target.value)} style={{ width: "auto", minWidth: 130, fontSize: 12 }}>
+                    <option value="tutti">Tutti</option>
+                    <option value="team">Solo team</option>
+                    <option value="prospect">Solo prospect</option>
+                  </select>
+                  <select value={filtroSquadra} onChange={e => setFiltroSquadra(e.target.value)} style={{ width: "auto", minWidth: 130, fontSize: 12 }}>
                     <option value="">Tutte le squadre</option>
-                    <option value="sinistra">Sinistra</option>
-                    <option value="destra">Destra</option>
-                  </select>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 420, overflowY: "auto" }}>
-                  {inBalloVisibili.length === 0
-                    ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>
-                        {inBallo.length === 0 ? "Nessuno al momento" : "Nessuno con questi filtri"}
-                      </div>
-                    : inBalloVisibili.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner={p.user_id !== auth.userId} squadraLabel={squadraOf[p.id]} onClick={() => canEdit(p) && setModal({ persona: p })} onMarkSold={canEdit(p) ? () => salvaPersona({ ...p, stato: "venduto" }) : null} />)
-                  }
-                </div>
-              </div>
-
-              <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem" }}>
-                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 10, gap: 10, flexWrap: "wrap" }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#10b981", textTransform: "uppercase", letterSpacing: .6 }}>Ticket venduti</div>
-                    <div style={{ fontSize: 30, fontWeight: 900, color: "#10b981", lineHeight: 1.1 }}>{venduti.length}</div>
-                  </div>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                    <select value={filtroMembro} onChange={e => setFiltroMembro(e.target.value)} style={{ width: "auto", minWidth: 130, fontSize: 12 }}>
-                      <option value="">Tutti i membri</option>
-                      <option value={auth.userId}>Solo i miei</option>
-                      {downline.map(m => <option key={m.id} value={m.id}>{m.nome || ""} {m.cognome || ""}</option>)}
-                    </select>
-                    <select value={filtroVenduti} onChange={e => setFiltroVenduti(e.target.value)} style={{ width: "auto", minWidth: 130, fontSize: 12 }}>
-                      <option value="tutti">Tutti</option>
-                      <option value="team">Solo team</option>
-                      <option value="prospect">Solo prospect</option>
-                    </select>
-                    <select value={filtroSquadra} onChange={e => setFiltroSquadra(e.target.value)} style={{ width: "auto", minWidth: 130, fontSize: 12 }}>
-                      <option value="">Tutte le squadre</option>
-                      <option value="sinistra">Solo sinistra</option>
-                      <option value="destra">Solo destra</option>
-                    </select>
-                    <select value={filtroCompletamento} onChange={e => setFiltroCompletamento(e.target.value)} style={{ width: "auto", minWidth: 130, fontSize: 12 }}>
-                      <option value="">Tutti i completamenti</option>
-                      <option value="0">Non iniziati (0%)</option>
-                      <option value="parziale">In corso (1-99%)</option>
-                      <option value="100">Completi (100%)</option>
-                    </select>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                  <div style={{ flex: 1, background: "var(--a1-13)", border: "1px solid var(--a1-25)", borderRadius: 9, padding: "6px 10px", textAlign: "center" }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: "var(--a2)", textTransform: "uppercase", letterSpacing: .5 }}>Sinistra</div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: "var(--a2)" }}>{vendutiSinistra.length}</div>
-                  </div>
-                  <div style={{ flex: 1, background: "#10b98115", border: "1px solid #10b98130", borderRadius: 9, padding: "6px 10px", textAlign: "center" }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: "#10b981", textTransform: "uppercase", letterSpacing: .5 }}>Destra</div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: "#10b981" }}>{vendutiDestra.length}</div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 420, overflowY: "auto" }}>
-                  {vendutiVisibili.length === 0
-                    ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>
-                        {venduti.length === 0 ? "Nessun ticket venduto ancora" : "Nessuno con questi filtri"}
-                      </div>
-                    : vendutiVisibili.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner squadraLabel={squadraOf[p.id]} onClick={() => canEdit(p) && setModal({ persona: p })} onToggleFlag={canEdit(p) ? (key) => salvaPersona({ ...p, [key]: !p[key] }) : null} />)
-                  }
-                </div>
-              </div>
-            </div>
-
-            {/* Ticket per membro del team */}
-            <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem", marginTop: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 10, flexWrap: "wrap" }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text)" }}>Ticket per membro del team</div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input value={cercaMembro} onChange={e => setCercaMembro(e.target.value)} placeholder="Cerca per nome..." style={{ width: "auto", minWidth: 150, fontSize: 12 }} />
-                  <select value={soloLeader ? "leader" : "tutti"} onChange={e => setSoloLeader(e.target.value === "leader")} style={{ width: "auto", minWidth: 110, fontSize: 12 }}>
-                    <option value="tutti">Tutti</option>
-                    <option value="leader">Solo leader</option>
+                    <option value="sinistra">Solo sinistra</option>
+                    <option value="destra">Solo destra</option>
                   </select>
                 </div>
               </div>
-              {membriBreakdownFiltrati.length === 0
-                ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>Nessun membro trovato</div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                <div style={{ flex: 1, background: "var(--a1-13)", border: "1px solid var(--a1-25)", borderRadius: 9, padding: "6px 10px", textAlign: "center" }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "var(--a2)", textTransform: "uppercase", letterSpacing: .5 }}>Sinistra</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "var(--a2)" }}>{vendutiSinistra.length}</div>
+                </div>
+                <div style={{ flex: 1, background: "#10b98115", border: "1px solid #10b98130", borderRadius: 9, padding: "6px 10px", textAlign: "center" }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#10b981", textTransform: "uppercase", letterSpacing: .5 }}>Destra</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "#10b981" }}>{vendutiDestra.length}</div>
+                </div>
+              </div>
+              {vendutiVisibili.length === 0
+                ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>
+                    {venduti.length === 0 ? "Nessun ticket venduto ancora" : "Nessuno con questi filtri"}
+                  </div>
                 : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                    {membriBreakdownFiltrati.map(x => {
-                      const isOpen = membroEspanso === x.membro.id;
-                      return (
-                        <div key={x.membro.id} style={{ background: "var(--bg3)", border: "1px solid " + (isOpen ? "var(--a1-25)" : "var(--border)"), borderRadius: 10, overflow: "hidden" }}>
-                          <button onClick={() => setMembroEspanso(isOpen ? null : x.membro.id)}
-                            style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 13px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
-                            <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                              {x.membro.nome || ""} {x.membro.cognome || ""}
-                            </div>
-                            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                              <span title="Personali" style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", background: "var(--bg4)", borderRadius: 6, padding: "3px 7px" }}>Personali {x.personali}</span>
-                              <span title="Downline sinistra" style={{ fontSize: 10, fontWeight: 700, color: "var(--a2)", background: "var(--a1-13)", borderRadius: 6, padding: "3px 7px" }}>Sx {x.sinistra}</span>
-                              <span title="Downline destra" style={{ fontSize: 10, fontWeight: 700, color: "#10b981", background: "#10b98118", borderRadius: 6, padding: "3px 7px" }}>Dx {x.destra}</span>
-                              <span title="Totale" style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: "linear-gradient(135deg,var(--a1),var(--a2))", borderRadius: 6, padding: "3px 8px" }}>Tot {x.totale}</span>
-                            </div>
-                            <span style={{ color: "var(--muted)", fontSize: 16, transform: isOpen ? "rotate(90deg)" : "none", transition: "transform .2s", flexShrink: 0 }}>{"\u203a"}</span>
-                          </button>
-                          {isOpen && (
-                            <div style={{ padding: "0 13px 13px 13px", display: "flex", flexDirection: "column", gap: 6 }}>
-                              {x.buyers.length === 0
-                                ? <div style={{ fontSize: 11, color: "var(--border2)", padding: "6px 0" }}>Nessun ticket venduto in questa downline</div>
-                                : x.buyers.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner onClick={() => canEdit(p) && setModal({ persona: p })} onToggleFlag={canEdit(p) ? (key) => salvaPersona({ ...p, [key]: !p[key] }) : null} />)
-                              }
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <div className="tbl-wrap" style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: "left", color: "var(--muted)", fontWeight: 600, fontSize: 11, padding: "4px 14px 10px", whiteSpace: "nowrap", position: "sticky", left: 0, background: "var(--bg2)", zIndex: 2 }}>Persona</th>
+                          <th style={{ textAlign: "left", color: "var(--muted)", fontWeight: 600, fontSize: 11, padding: "11px 10px", whiteSpace: "nowrap" }}>Di</th>
+                          <th style={{ textAlign: "center", color: "var(--muted)", fontWeight: 600, fontSize: 11, padding: "11px 10px", whiteSpace: "nowrap" }}>Squadra</th>
+                          {FLAG_DEFS.map(f => {
+                            // una sola cosa colorata per colonna: il contatore. L'etichetta resta
+                            // grigia, altrimenti testa e numero si fanno concorrenza.
+                            const n = vendutiVisibili.filter(p => p[f.key]).length;
+                            return (
+                              <th key={f.key} style={{ padding: "4px 4px 10px", minWidth: 68, verticalAlign: "bottom" }}>
+                                <div style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)", whiteSpace: "nowrap", textAlign: "center" }}>{f.label}</div>
+                                <div style={{ marginTop: 2, textAlign: "center", fontSize: 14, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: n > 0 ? f.clr : "var(--border2)" }}>{n}</div>
+                              </th>
+                            );
+                          })}
+                          <th style={{ textAlign: "left", color: "var(--muted)", fontWeight: 600, fontSize: 11, padding: "11px 8px 11px 16px", minWidth: 220 }}>Note</th>
+                          <th style={{ padding: "11px 14px 11px 0" }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {vendutiVisibili.map(p => (
+                          <RigaTicket key={p.id} p={p}
+                            ownerName={ownerNameOf(p.user_id)} squadraLabel={squadraOf[p.id]}
+                            editabile={canEdit(p)}
+                            onOpen={() => canEdit(p) && setModal({ persona: p })}
+                            onToggleFlag={toggleFlag} onSaveNote={salvaNota} />
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )
               }
+            </div>
+
+            {/* ===== 2. In ballo ===== */}
+            <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.2rem", marginBottom: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "#f59e0b" }}>
+                  In ballo {"\u00b7"} {inBalloVisibili.length}
+                  {inBalloVisibili.length !== inBallo.length && (
+                    <span style={{ color: "var(--muted)", fontWeight: 700 }}> {"/"} {inBallo.length}</span>
+                  )}
+                </div>
+                <button onClick={() => setModal({ persona: null, stato: "in_ballo" })}
+                  style={{ padding: "5px 12px", fontSize: 11, fontWeight: 800, background: "#f59e0b18", color: "#f59e0b", border: "1px solid #f59e0b40", borderRadius: 8, cursor: "pointer" }}>
+                  + Aggiungi
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                <select value={ibOrigine} onChange={e => setIbOrigine(e.target.value)} style={{ flex: "0 1 160px", minWidth: 120, fontSize: 12 }}>
+                  <option value="tutti">Tutti</option>
+                  <option value="personali">Personali</option>
+                  <option value="team">Team</option>
+                </select>
+                <select value={ibSquadra} onChange={e => setIbSquadra(e.target.value)} style={{ flex: "0 1 160px", minWidth: 120, fontSize: 12 }}>
+                  <option value="">Tutte le squadre</option>
+                  <option value="sinistra">Sinistra</option>
+                  <option value="destra">Destra</option>
+                </select>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 420, overflowY: "auto" }}>
+                {inBalloVisibili.length === 0
+                  ? <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--border2)", fontSize: 12 }}>
+                      {inBallo.length === 0 ? "Nessuno al momento" : "Nessuno con questi filtri"}
+                    </div>
+                  : inBalloVisibili.map(p => <PersonaCard key={p.id} p={p} ownerName={ownerNameOf(p.user_id)} showOwner={p.user_id !== auth.userId} squadraLabel={squadraOf[p.id]} onClick={() => canEdit(p) && setModal({ persona: p })} onMarkSold={canEdit(p) ? () => salvaPersona({ ...p, stato: "venduto" }) : null} />)
+                }
+              </div>
             </div>
             </>
           )}
         </>
       )}
+
+      {/* ===== 3. Leaderboard (non modificata) ===== */}
+      <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.6rem", marginBottom: 18 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 18, display: "flex", alignItems: "center", gap: 8 }}>
+          <span>{"\ud83c\udfc6"}</span> Leaderboard
+        </div>
+        <Leaderboard ranking={ranking} />
+      </div>
+
+      {/* ===== 4. Andamento (non modificato) ===== */}
+      <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 16, padding: "1.4rem", marginBottom: 18 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 14 }}>Andamento</div>
+        <div style={{ height: 220 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 5, right: 10, left: -15, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="nome" stroke="var(--muted)" fontSize={11} />
+              <YAxis stroke="var(--muted)" fontSize={12} allowDecimals={false} />
+              <Tooltip contentStyle={{ background: "var(--bg2)", border: "1px solid var(--border2)", borderRadius: 10, fontSize: 12 }} labelStyle={{ color: "var(--text)" }} />
+              <Bar dataKey="venduti" name="Venduti" radius={[6, 6, 0, 0]} fill="var(--a1)">
+                {chartData.map((_, i) => <Cell key={i} fill="var(--a1)" />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
 
       {modal && (
         <div onClick={() => setModal(null)} style={{ position: "fixed", inset: 0, background: "#00000090", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
