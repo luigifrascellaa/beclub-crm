@@ -206,19 +206,17 @@ function PersonaModal({ persona, defaultStato, onSave, onClose, onDelete, auth, 
             <option value="prospect">Prospect</option>
           </select>
         </div>
-        {(form.categoria || "team") === "team" && (
-          <div style={{ gridColumn: "1/-1" }}>
-            <label style={lbl}>Squadra</label>
-            <select value={form.squadra_manuale || ""} onChange={e => setForm(f => ({ ...f, squadra_manuale: e.target.value }))}>
-              <option value="">Non specificata</option>
-              <option value="sinistra">Sinistra</option>
-              <option value="destra">Destra</option>
-            </select>
-            <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 5, lineHeight: 1.4 }}>
-              Serve solo per i membri del team gia' presenti in struttura: indica in quale delle tue due gambe far rientrare la persona nelle numeriche Sinistra/Destra. Se il record e' di un altro membro, la squadra viene calcolata dall'albero e questo campo viene ignorato.
-            </div>
+        <div style={{ gridColumn: "1/-1" }}>
+          <label style={lbl}>Squadra</label>
+          <select value={form.squadra_manuale || ""} onChange={e => setForm(f => ({ ...f, squadra_manuale: e.target.value }))}>
+            <option value="">Non specificata</option>
+            <option value="sinistra">Sinistra</option>
+            <option value="destra">Destra</option>
+          </select>
+          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 5, lineHeight: 1.4 }}>
+            Serve solo per i conteggi: indica in quale delle tue due gambe far rientrare questa persona nelle numeriche Sinistra/Destra. Vale sia per i membri del team sia per i prospect portati da te, che in struttura non stanno sotto nessuna gamba e altrimenti resterebbero fuori dal conteggio. Se il record e' di un altro membro della downline la squadra viene calcolata dall'albero e questo campo viene ignorato.
           </div>
-        )}
+        </div>
         <div><label style={lbl}>Nome</label><input value={form.nome || ""} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Mario" /></div>
         <div><label style={lbl}>Cognome</label><input value={form.cognome || ""} onChange={e => setForm(f => ({ ...f, cognome: e.target.value }))} placeholder="Rossi" /></div>
         <div style={{ gridColumn: "1/-1" }}><label style={lbl}>Citta</label><input value={form.citta || ""} onChange={e => setForm(f => ({ ...f, citta: e.target.value }))} placeholder="Milano" /></div>
@@ -506,11 +504,13 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   );
 
   async function salvaPersona(form) {
-    // la squadra manuale ha senso solo per la categoria "team": se il record torna
-    // "prospect" il campo va azzerato, altrimenti resta un valore fantasma che
-    // continuerebbe a spostare la persona in una gamba
     const categoria = form.categoria || "team";
-    const squadraManuale = categoria === "team" ? (form.squadra_manuale || null) : null;
+    // La squadra manuale vale per QUALSIASI categoria: serve solo ai conteggi
+    // Sinistra/Destra. Per i prospect portati da te e' l'unica fonte possibile,
+    // perche' l'albero non sa collocare un record il cui proprietario sei tu stesso
+    // (getSquadraRelativeTo ritorna null quando il membro coincide con la radice).
+    // Resta ignorata in lettura sui record di altri membri, dove decide l'albero.
+    const squadraManuale = form.squadra_manuale || null;
     // venduto_at = quando e' stato dato il SALDO, cioe' quando il ticket e' stato
     // preso intero. Va preservata se c'e' gia', altrimenti ogni salvataggio la
     // riscriverebbe a "adesso" e la data reale della vendita andrebbe persa.
