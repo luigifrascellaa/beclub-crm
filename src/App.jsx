@@ -713,7 +713,11 @@ export default function App() {
     if (!auth) { setTicketVendutiCount(0); return; }
     const myTeamIds = new Set([auth.userId, ...downline.map(d=>d.id)]);
     sbListEventoPersone(auth.token, null).then(rows=>{
-      const count = (rows||[]).filter(r => r.stato==="venduto" && myTeamIds.has(r.user_id)).length;
+      // gli "in forse" non contano da nessuna parte: stessa regola applicata in
+      // Eventi.jsx, che sovrascrive questo valore via onTicketCountChange quando la
+      // vista e' aperta. Se i due filtri divergessero, il KPI cambierebbe a seconda
+      // che tu sia passato o no dalla pagina Eventi.
+      const count = (rows||[]).filter(r => r.stato==="venduto" && !r.in_forse && myTeamIds.has(r.user_id)).length;
       setTicketVendutiCount(count);
     }).catch(()=>{});
   },[auth, downline]);

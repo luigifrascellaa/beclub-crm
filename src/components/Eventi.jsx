@@ -452,12 +452,21 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
     }).catch(() => {});
   }, [auth, LUDOVICO_ID]);
 
+  // Unica base di TUTTI i conteggi che escono da qui: leaderboard, grafico Andamento
+  // e KPI della Dashboard. Un ticket "in forse" non conta da nessuna parte, esattamente
+  // come nel numerone della sezione Ticket venduti.
+  // Il filtro sta qui e non sul caricamento perche' `tuttiVenduti` deve continuare a
+  // contenere anche gli "in forse": e' la lista che toggleFlag/salvaNota tengono
+  // sincronizzata, e se una riga ne uscisse quando la spunti non potrebbe piu'
+  // rientrarci quando la togli.
+  const vendutiContabili = useMemo(() => tuttiVenduti.filter(p => !p.in_forse), [tuttiVenduti]);
+
   // notifica App.jsx col conteggio aggiornato (tu + downline), cosi la Dashboard resta in tempo reale
   useEffect(() => {
     if (!onTicketCountChange) return;
-    const myCount = tuttiVenduti.filter(p => myTeamIds.has(p.user_id)).length;
+    const myCount = vendutiContabili.filter(p => myTeamIds.has(p.user_id)).length;
     onTicketCountChange(myCount);
-  }, [tuttiVenduti, myTeamIds, onTicketCountChange]);
+  }, [vendutiContabili, myTeamIds, onTicketCountChange]);
 
   const teamDiLudovicoIds = useMemo(() => {
     if (!LUDOVICO_ID) return new Set();
@@ -472,7 +481,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
 
   const ranking = useMemo(() => {
     const counts = {};
-    tuttiVenduti.forEach(p => {
+    vendutiContabili.forEach(p => {
       if (!teamDiLudovicoIds.has(p.user_id)) return;
       counts[p.user_id] = (counts[p.user_id] || 0) + 1;
     });
@@ -483,17 +492,17 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
         const prof = (allProfiles || []).find(p => p.id === userId);
         return { userId, nome: prof?.nome || "", cognome: prof?.cognome || "" };
       });
-  }, [tuttiVenduti, teamDiLudovicoIds, allProfiles]);
+  }, [vendutiContabili, teamDiLudovicoIds, allProfiles]);
 
-  // grafico evento per evento: deriva da tuttiVenduti (gia caricato), conteggio personal+downline
+  // grafico evento per evento: deriva dai venduti contabili, conteggio personal+downline
   const vendutiPerEvento = useMemo(() => {
     const map = {};
-    tuttiVenduti.forEach(p => {
+    vendutiContabili.forEach(p => {
       if (!myTeamIds.has(p.user_id)) return;
       map[p.evento_id] = (map[p.evento_id] || 0) + 1;
     });
     return map;
-  }, [tuttiVenduti, myTeamIds]);
+  }, [vendutiContabili, myTeamIds]);
 
   const chartData = useMemo(() =>
     [...eventi].sort((a, b) => a.data.localeCompare(b.data)).map(ev => ({
