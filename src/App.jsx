@@ -604,7 +604,6 @@ export default function App() {
   const [dlProspects, setDlProspects] = useState([]);
   const [positions, setPositions] = useState([]);
   const [dashMode, setDashMode]   = useState("personale");
-  const [sidebarMode, setSidebarMode] = useState("tutti");
   const [appMode, setAppMode] = useState("marketer"); // "marketer" | "cliente"
   const [listaMode, setListaMode] = useState("personale");
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false); // solo mobile: sidebar come drawer scorrevole
@@ -1283,7 +1282,7 @@ export default function App() {
 
       <div className="drawer-scrim" onClick={()=>setMobileDrawerOpen(false)} style={{position:"fixed",inset:0,zIndex:1700,background:"#00000090",opacity:mobileDrawerOpen?1:0,pointerEvents:mobileDrawerOpen?"auto":"none",transition:"opacity .2s ease"}} />
 
-      <Sidebar view={view} setView={v=>{setView(v);setMobileDrawerOpen(false);}} data={data} urgenti={urgenti} onAdd={()=>{openAdd();setMobileDrawerOpen(false);}} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downlineAttiva.length} sidebarMode={sidebarMode} setSidebarMode={setSidebarMode} appMode={appMode} setAppMode={m=>{setAppMode(m);setMobileDrawerOpen(false);}} showToast={showToast} drawerOpen={mobileDrawerOpen} onCloseDrawer={()=>setMobileDrawerOpen(false)} />
+      <Sidebar view={view} setView={v=>{setView(v);setMobileDrawerOpen(false);}} data={data} urgenti={urgenti} onAdd={()=>{openAdd();setMobileDrawerOpen(false);}} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downlineAttiva.length} appMode={appMode} setAppMode={m=>{setAppMode(m);setMobileDrawerOpen(false);}} showToast={showToast} drawerOpen={mobileDrawerOpen} onCloseDrawer={()=>setMobileDrawerOpen(false)} />
 
       <main className="mc" style={{flex:1,overflowY:"auto",height:"100vh",paddingBottom:0}}>
         {(appMode==="cliente" || !(auth?.profile?.marketer_unlocked || auth?.profile?.is_leader)) ? (
@@ -1345,7 +1344,7 @@ export default function App() {
 }
 
 //  SIDEBAR 
-function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout, downlineCount, sidebarMode, setSidebarMode, appMode, setAppMode, showToast, drawerOpen, onCloseDrawer }) {
+function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout, downlineCount, appMode, setAppMode, showToast, drawerOpen, onCloseDrawer }) {
   const marketerAllowed = !!(auth?.profile?.marketer_unlocked || auth?.profile?.is_leader);
   const navs = [
     { id:"dash",    icon:"", label:"Dashboard" },
@@ -1411,36 +1410,7 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
       </div>
       )}
 
-      {appMode==="marketer" && marketerAllowed && (
-      <div style={{marginTop:14,borderTop:"1px solid var(--border)",paddingTop:14}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-          <div style={{fontSize:10,fontWeight:800,color:"var(--border2)",textTransform:"uppercase",letterSpacing:1.2}}>Totale ora</div>
-          <div style={{display:"flex",background:"var(--bg3)",borderRadius:6,padding:2,border:"1px solid var(--border)"}}>
-            {["tutti","ciclo"].map(m=>(
-              <button key={m} onClick={()=>setSidebarMode(m)}
-                style={{padding:"2px 7px",borderRadius:4,border:"none",cursor:"pointer",fontSize:9,fontWeight:800,fontFamily:"inherit",background:sidebarMode===m?"var(--a1)":"transparent",color:sidebarMode===m?"#fff":"var(--muted)",transition:"all .15s"}}>
-                {m==="tutti"?"Tutti":"C"+CICLO_CORRENTE}
-              </button>
-            ))}
-          </div>
-        </div>
-        {FASI.map(f=>{
-          const n = sidebarMode==="ciclo"
-            ? data.filter(p=>p.fase===f && cicloOfDate(p.conosciutoAt)===CICLO_CORRENTE).length
-            : data.filter(p=>p.fase===f).length;
-          return (
-            <div key={f} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 2px"}}>
-              <span style={{display:"flex",alignItems:"center",gap:7,fontSize:11,color:"var(--muted)"}}>
-                <span style={{width:7,height:7,borderRadius:99,background:FASE_CLR[f],flexShrink:0}} />{FASE_LABEL[f]}
-              </span>
-              <span style={{fontWeight:800,fontSize:12,color:n>0?FASE_CLR[f]:"var(--border2)"}}>{n}</span>
-            </div>
-          );
-        })}
-      </div>
-      )}
-
-      <div style={{marginTop:"auto",paddingTop:14,borderTop:"1px solid #11203a"}}>
+      <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid #11203a"}}>
         <div style={{fontSize:10,color:"var(--muted)",marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{auth?.email}</div>
         <button onClick={onLogout} style={{width:"100%",padding:"8px 10px",background:"#ef444415",color:"#f87171",border:"1px solid #ef444430",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}>Esci</button>
       </div>
