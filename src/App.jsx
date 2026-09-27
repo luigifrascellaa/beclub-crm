@@ -48,6 +48,44 @@ async function sbFetch(path, opts = {}) {
 
 const sbSignUp  = (email, pw)      => sbFetch("/auth/v1/signup", { method:"POST", body:JSON.stringify({ email, password:pw }) });
 const sbSignIn  = (email, pw)      => sbFetch("/auth/v1/token?grant_type=password", { method:"POST", body:JSON.stringify({ email, password:pw }) });
+
+// ─── Rinnovo del token di accesso ──────────────────────────────────────────
+// Il token Supabase scade (di default dopo un'ora). Fino a settembre 2026 il login
+// scartava il refresh_token della risposta: alla scadenza il primo click finiva nel
+// 401 di sbFetch, che cancella la sessione e ricarica la pagina — l'utente veniva
+// buttato fuori perdendo quello che stava scrivendo. Ora il refresh_token viene
+// conservato e il token rinnovato PRIMA che scada.
+// Un token di rinnovo non valido restituisce 400 (non 401), quindi un rinnovo
+// fallito NON innesca il ricaricamento forzato di sbFetch: lo gestisce il chiamante.
+const sbRefresh = (refreshToken) => sbFetch("/auth/v1/token?grant_type=refresh_token", { method:"POST", body:JSON.stringify({ refresh_token:refreshToken }) });
+
+// Si rinnova quando mancano meno di 5 minuti alla scadenza. Margine largo apposta:
+// il client Realtime chiede il token ogni 25 secondi e la sua documentazione avverte
+// che deve restare valido oltre la chiamata successiva, altrimenti il server chiude
+// il canale SENZA risottoscrivere.
+const RINNOVO_ANTICIPO_S = 300;
+
+// Unico punto che costruisce una sessione a partire da una risposta di login o di
+// rinnovo: registrazione, accesso, ripristino e rinnovo non possono divergere.
+// `sessionKey` identifica il LOGIN, non il token: resta uguale attraverso i rinnovi.
+// Serve a tutto cio' che prima usava il token come "questa sessione" (il popup
+// reminder), che altrimenti si ripresenterebbe a ogni rinnovo, cioe' ogni ora.
+function sessioneDaRisposta(res, base) {
+  const ora = Math.floor(Date.now() / 1000);
+  return {
+    ...base,
+    token: res.access_token,
+    refreshToken: res.refresh_token,
+    expiresAt: res.expires_at || (ora + (res.expires_in || 3600)),
+    sessionKey: (base && base.sessionKey) || res.access_token,
+  };
+}
+
+// Vero anche per sessioni senza scadenza nota: vanno rinnovate subito.
+function staPerScadere(sessione) {
+  if (!sessione || !sessione.expiresAt) return true;
+  return sessione.expiresAt - Math.floor(Date.now() / 1000) < RINNOVO_ANTICIPO_S;
+}
 const sbSignOut = (tok)            => sbFetch("/auth/v1/logout", { method:"POST", _token:tok });
 const sbResetPassword = (email)    => sbFetch("/auth/v1/recover?redirect_to="+encodeURIComponent(window.location.origin), { method:"POST", body:JSON.stringify({ email }) });
 const sbUpdatePasswordWithToken = (tok, newPassword) => sbFetch("/auth/v1/user", { method:"PUT", _token:tok, body:JSON.stringify({ password:newPassword }) });
@@ -249,17 +287,37 @@ function AuthScreen({ onAuth }) {
       try {
         const session = JSON.parse(saved);
         if (session.token && session.userId) {
-          // Ripristina subito con i dati in cache (niente attesa), poi aggiorna il profilo con la versione fresca dal database
-          // Necessario perche' un leader potrebbe aver sbloccato/promosso l'account da un altro dispositivo/sessione
-          onAuth({ token:session.token, userId:session.userId, email:session.email, profile:session.profile||null });
-          sbGetProfile(session.token, session.userId).then(rows => {
-            if (rows && rows[0]) {
-              const freshProfile = rows[0];
-              const updatedSession = { token:session.token, userId:session.userId, email:session.email, profile:freshProfile };
-              onAuth(updatedSession);
-              localStorage.setItem("becrm_session", JSON.stringify(updatedSession));
-            }
-          }).catch(()=>{});
+          // Avvia con i dati in cache (niente attesa), poi aggiorna il profilo con la versione
+          // fresca dal database: un leader potrebbe aver sbloccato/promosso l'account da un
+          // altro dispositivo. La sessione va ESTESA con lo spread, mai ricostruita a mano:
+          // riscriverla con quattro campi fissi butterebbe via refreshToken ed expiresAt.
+          const avvia = (s) => {
+            onAuth(s);
+            sbGetProfile(s.token, s.userId).then(rows => {
+              if (rows && rows[0]) {
+                const aggiornata = { ...s, profile: rows[0] };
+                onAuth(aggiornata);
+                localStorage.setItem("becrm_session", JSON.stringify(aggiornata));
+              }
+            }).catch(()=>{});
+          };
+          if (session.refreshToken && staPerScadere(session)) {
+            // Token scaduto o quasi: si rinnova PRIMA di usarlo. Usarlo scaduto farebbe
+            // finire la prima chiamata nel 401 di sbFetch, cioe' fuori dal CRM.
+            sbRefresh(session.refreshToken)
+              .then(res => {
+                const s = sessioneDaRisposta(res, { userId:session.userId, email:session.email, profile:session.profile||null, sessionKey:session.sessionKey });
+                localStorage.setItem("becrm_session", JSON.stringify(s));
+                avvia(s);
+              })
+              .catch(() => { localStorage.removeItem("becrm_session"); }); // rinnovo rifiutato: si rifa' il login
+          } else {
+            // Sessione ancora valida, oppure salvata prima di settembre 2026 senza
+            // refreshToken: si usa com'e'. Quella vecchia regge finche' il token vale, poi il
+            // 401 porta al login e il nuovo accesso salva una sessione rinnovabile. Nessuno
+            // viene buttato fuori al momento del deploy.
+            avvia({ ...session, profile: session.profile || null });
+          }
         }
       } catch(e) { localStorage.removeItem("becrm_session"); }
     }
@@ -319,7 +377,7 @@ function AuthScreen({ onAuth }) {
           localStorage.removeItem("pending_ref_expires");
           await sbCreateProfile(tok, { id:userId, email, nome:nome.trim(), cognome:cognome.trim(), citta:citta.trim(), upline_id:uplineId, positioned_under:uplineId, marketer_unlocked:false });
           const profile = await sbGetProfile(tok, userId);
-          const authData = { token:tok, userId, email, profile:profile?.[0]||null };
+          const authData = sessioneDaRisposta(res, { userId, email, profile:profile?.[0]||null });
           if (remember) localStorage.setItem("becrm_session", JSON.stringify(authData));
           onAuth(authData);
         } else {
@@ -350,7 +408,7 @@ function AuthScreen({ onAuth }) {
             setLoading(false);
             return;
           }
-          const authData = { token:tok, userId, email, profile:prof };
+          const authData = sessioneDaRisposta(res, { userId, email, profile:prof });
           if (remember) localStorage.setItem("becrm_session", JSON.stringify(authData));
           onAuth(authData);
         } else {
@@ -620,17 +678,87 @@ export default function App() {
     if (auth?.profile?.tema) applyTema(auth.profile.tema);
   },[auth?.profile?.tema]);
 
+  // ─── Rinnovo proattivo del token ────────────────────────────────────────────
+  // Un timer che scatta 5 minuti prima della scadenza, piu' un controllo quando la
+  // scheda torna visibile: i timer non girano col portatile in sospensione, e
+  // riaprendolo dopo due ore il primo click arriverebbe prima del timer, dritto nel 401.
+  // Il rinnovo conserva lo stesso riferimento a `profile` (spread), cosi' gli effetti di
+  // caricamento — che dipendono da userId e profile, non dal token — non ripartono.
   useEffect(()=>{
-    if (!auth?.token) return;
-    // Mostra il reminder solo se questo token (cioe' questa specifica sessione/login)
-    // non l'ha gia' fatto vedere. Sopravvive ai reload finche' la sessione resta valida.
-    const lastShownFor = localStorage.getItem("evento_reminder_token");
-    if (lastShownFor !== auth.token) {
-      setShowEventoReminder(true);
-      localStorage.setItem("evento_reminder_token", auth.token);
-    }
-  },[auth?.token]);
+    if (!auth?.refreshToken || !auth?.expiresAt) return; // sessione vecchia: non rinnovabile
+    let annullato = false;
+    let inCorso = false;
 
+    async function rinnova() {
+      if (inCorso) return; // timer e ritorno sulla scheda possono scattare insieme
+      inCorso = true;
+      try {
+        // Un'altra scheda aperta potrebbe aver gia' rinnovato. In quel caso si adotta la sua
+        // sessione invece di consumare di nuovo lo stesso refresh token: Supabase lo ruota a
+        // ogni uso, e riusarne uno gia' consumato fa scadere la sessione.
+        let salvata = null;
+        try { salvata = JSON.parse(localStorage.getItem("becrm_session") || "null"); } catch(e) {}
+        if (salvata && salvata.userId === auth.userId && salvata.refreshToken
+            && salvata.expiresAt > auth.expiresAt && !staPerScadere(salvata)) {
+          if (!annullato) setAuth(a => a ? { ...a, token:salvata.token, refreshToken:salvata.refreshToken, expiresAt:salvata.expiresAt } : a);
+          return;
+        }
+        const res = await sbRefresh(auth.refreshToken);
+        if (annullato) return;
+        setAuth(a => {
+          if (!a) return a;
+          const s = sessioneDaRisposta(res, a);
+          // si riscrive solo se l'utente aveva scelto "ricordami": altrimenti la sessione
+          // vive solo in memoria e non deve comparire su disco
+          if (localStorage.getItem("becrm_session")) localStorage.setItem("becrm_session", JSON.stringify(s));
+          return s;
+        });
+      } catch(e) {
+        // Refresh token revocato o scaduto: la sessione e' morta, si torna al login.
+        // Niente sbSignOut: col token scaduto finirebbe nel 401 e ricaricherebbe la pagina.
+        if (annullato) return;
+        localStorage.removeItem("becrm_session");
+        setAuth(null); setData([]); setReady(true);
+      } finally {
+        inCorso = false;
+      }
+    }
+
+    const tra = (auth.expiresAt - RINNOVO_ANTICIPO_S) * 1000 - Date.now();
+    const timer = setTimeout(rinnova, Math.max(0, tra));
+    function controlla() { if (document.visibilityState === "visible" && staPerScadere(auth)) rinnova(); }
+    document.addEventListener("visibilitychange", controlla);
+    window.addEventListener("focus", controlla);
+    return () => {
+      annullato = true;
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", controlla);
+      window.removeEventListener("focus", controlla);
+    };
+  },[auth?.userId, auth?.refreshToken, auth?.expiresAt]);
+
+  // Identita' del LOGIN, stabile attraverso i rinnovi del token. Le sessioni salvate
+  // prima di settembre 2026 non hanno sessionKey: per loro si ricade sul token, che non
+  // cambia perche' senza refreshToken non vengono mai rinnovate.
+  const chiaveSessione = auth ? (auth.sessionKey || auth.token) : null;
+  useEffect(()=>{
+    if (!chiaveSessione) return;
+    // Mostra il reminder solo se questo login non l'ha gia' fatto vedere. Sopravvive ai
+    // reload finche' la sessione resta la stessa. NON va legato ad auth.token: il token
+    // ora si rinnova ogni ora e il popup ricomparirebbe a ogni rinnovo.
+    const lastShownFor = localStorage.getItem("evento_reminder_token");
+    if (lastShownFor !== chiaveSessione) {
+      setShowEventoReminder(true);
+      localStorage.setItem("evento_reminder_token", chiaveSessione);
+    }
+  },[chiaveSessione]);
+
+  // Dipendenze: utente e profilo, MAI l'oggetto `auth` intero. Il rinnovo del token crea
+  // un nuovo oggetto `auth` ogni ora: con [auth] questo effetto ripartirebbe, metterebbe
+  // setReady(false) e ricaricherebbe tutto — il CRM sparirebbe dietro il caricamento a
+  // meta' lavoro, portandosi via anagrafiche aperte e note in scrittura. Il profilo resta
+  // nelle dipendenze per non cambiare il comportamento esistente dopo updateProfile, che
+  // lo sostituisce (mentre il rinnovo ne conserva lo stesso riferimento con lo spread).
   useEffect(()=>{
     if (!auth) { setData([]); setReady(true); return; }
     setReady(false);
@@ -707,7 +835,7 @@ export default function App() {
         }));
       }
     }).catch(()=>{});
-  },[auth]);
+  },[auth?.userId, auth?.profile]);
 
   useEffect(()=>{
     if (!auth) { setTicketVendutiCount(0); return; }
@@ -720,7 +848,7 @@ export default function App() {
       const count = (rows||[]).filter(r => r.stato==="venduto" && !r.in_forse && myTeamIds.has(r.user_id)).length;
       setTicketVendutiCount(count);
     }).catch(()=>{});
-  },[auth, downline]);
+  },[auth?.userId, auth?.profile, downline]); // non [auth]: vedi il caricamento principale
 
   function isMyDownline(profile, myId, allProfiles) {
     if (profile.positioned_under === myId) return true;

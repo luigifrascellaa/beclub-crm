@@ -219,7 +219,7 @@ export function ListaNomiView({ auth, onInvitaProspect }) {
     sbListaNomi(auth.token, auth.userId).then(rows => {
       setLista(rows||[]);
     }).catch(e=>showToast("Errore: "+e.message,"#ef4444")).finally(()=>setLoading(false));
-  }, [auth]);
+  }, [auth?.userId, auth?.profile]); // non [auth]: il rinnovo orario del token crea un nuovo oggetto auth e ricaricherebbe tutto
 
   async function savPersona(form) {
     if (!form.nome?.trim()) return;

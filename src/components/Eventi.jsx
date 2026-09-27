@@ -354,13 +354,13 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
       setEventi(list);
       if (list.length > 0 && !eventoAttivo) setEventoAttivo(list[0].id);
     }).catch(e => showToast("Errore: " + e.message, "#ef4444")).finally(() => setLoading(false));
-  }, [auth]);
+  }, [auth?.userId, auth?.profile]); // non [auth]: il rinnovo orario del token crea un nuovo oggetto auth e ricaricherebbe tutto
 
   useEffect(() => {
     if (!auth || !eventoAttivo) { setPersone([]); return; }
     sbListEventoPersone(auth.token, eventoAttivo).then(rows => setPersone(rows || []))
       .catch(e => showToast("Errore: " + e.message, "#ef4444"));
-  }, [auth, eventoAttivo]);
+  }, [auth?.userId, auth?.profile, eventoAttivo]); // non [auth]: il rinnovo orario del token crea un nuovo oggetto auth e ricaricherebbe tutto
 
   // id di tutta la downline (me + tutti sotto)
   const myTeamIds = useMemo(() => new Set([auth.userId, ...downline.map(d => d.id)]), [auth.userId, downline]);
@@ -450,7 +450,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
     sbListEventoPersone(auth.token, null).then(rows => {
       setTuttiVenduti((rows || []).filter(r => r.stato === "venduto"));
     }).catch(() => {});
-  }, [auth, LUDOVICO_ID]);
+  }, [auth?.userId, auth?.profile, LUDOVICO_ID]); // non [auth]: il rinnovo orario del token crea un nuovo oggetto auth e ricaricherebbe tutto
 
   // Unica base di TUTTI i conteggi che escono da qui: leaderboard, grafico Andamento
   // e KPI della Dashboard. Un ticket "in forse" non conta da nessuna parte, esattamente
