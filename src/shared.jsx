@@ -259,3 +259,159 @@ export function Av({ n, c, color, size=34, soft=false }) {
     </div>
   );
 }
+
+
+// ══════════════════════════════════════════════════════════════
+// CRONOLOGIA MODIFICHE (frecce indietro / avanti) — parte PURA.
+// Lo state della pila vive in App.jsx (useCronologia), istanziato una volta sola e
+// passato alle viste. Qui stanno solo: confronto tra valori, costruttori delle
+// azioni (ricevono lettura e scrittura come parametri, non chiamano la rete da soli)
+// e i due pulsanti, che sono pura presentazione.
+//
+// Ogni azione sa verificare PRIMA di agire che nessun altro abbia toccato la riga:
+// senza questa guardia, annullare riscriverebbe alla cieca un valore vecchio sopra la
+// modifica di un collega, e in un CRM senza registro delle modifiche nessuno se ne
+// accorgerebbe mai.
+// ══════════════════════════════════════════════════════════════
+
+// Rende confrontabili due valori arrivati da strade diverse (memoria vs database):
+// - jsonb riordina le chiavi degli oggetti: si confrontano in ordine alfabetico
+// - un timestamptz torna in un formato diverso da quello scritto ("...Z" vs "+00:00"):
+//   si confronta l'istante, non la stringa
+// - null, undefined e chiave assente dentro un oggetto valgono uguale
+// Nel dubbio il confronto sbaglia dalla parte sicura: un falso "modificato da altri"
+// blocca un undo innocuo, mentre un falso "uguale" sovrascriverebbe lavoro altrui.
+function normalizzaValore(v) {
+  if (v === undefined || v === null) return null;
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
+    const t = Date.parse(v);
+    return isNaN(t) ? v : "@" + t;
+  }
+  if (Array.isArray(v)) return v.map(normalizzaValore);
+  if (typeof v === "object") {
+    const o = {};
+    Object.keys(v).sort().forEach(k => {
+      const n = normalizzaValore(v[k]);
+      if (n !== null) o[k] = n;
+    });
+    return o;
+  }
+  return v;
+}
+
+export function valoriUguali(a, b) {
+  return JSON.stringify(normalizzaValore(a)) === JSON.stringify(normalizzaValore(b));
+}
+
+export function scegliCampi(obj, chiavi) {
+  const o = {};
+  chiavi.forEach(k => { o[k] = obj == null ? null : (obj[k] === undefined ? null : obj[k]); });
+  return o;
+}
+
+// Solo le chiavi il cui valore e' davvero cambiato. Serve a scrivere il minimo
+// indispensabile: riscrivere un campo non toccato cancellerebbe la modifica che un
+// collega ci ha fatto nel frattempo.
+export function campiCambiati(prima, dopo) {
+  const tutte = Object.keys({ ...(prima || {}), ...(dopo || {}) });
+  return tutte.filter(k => !valoriUguali(prima ? prima[k] : null, dopo ? dopo[k] : null));
+}
+
+// Modifica di alcuni campi di una riga esistente.
+// `prima` e `dopo` hanno le stesse chiavi, valori in formato database.
+export function azioneModifica({ etichetta, leggi, scrivi, prima, dopo }) {
+  const chiavi = Object.keys(dopo);
+  const verifica = atteso => async () => {
+    const riga = await leggi();
+    if (!riga) return "la riga non esiste piu'";
+    return valoriUguali(scegliCampi(riga, chiavi), atteso) ? null : "e' stata modificata da qualcun altro nel frattempo";
+  };
+  return {
+    etichetta,
+    verificaAnnulla: verifica(dopo), annulla: () => scrivi(prima),
+    verificaRipeti: verifica(prima), ripeti: () => scrivi(dopo),
+  };
+}
+
+// Creazione di una riga: annullare = cancellarla, ripetere = reinserirla identica.
+// `riga` e' quella restituita dal database all'inserimento (con created_at & co).
+export function azioneCreazione({ etichetta, leggi, cancella, reinserisci, riga }) {
+  return {
+    etichetta,
+    verificaAnnulla: async () => {
+      const attuale = await leggi();
+      if (!attuale) return null; // gia' sparita: annullare non ha niente da fare
+      return valoriUguali(attuale, riga) ? null : "e' stata modificata da qualcun altro nel frattempo";
+    },
+    annulla: () => cancella(),
+    verificaRipeti: async () => ((await leggi()) ? "esiste gia'" : null),
+    ripeti: () => reinserisci(riga),
+  };
+}
+
+// Cancellazione: `riga` e' l'istantanea grezza letta dal database PRIMA di cancellare,
+// cosi' il ripristino rimette la riga identica (proprietario e data di creazione compresi).
+export function azioneCancellazione({ etichetta, leggi, cancella, reinserisci, riga }) {
+  return {
+    etichetta,
+    verificaAnnulla: async () => ((await leggi()) ? "e' gia' stata ripristinata" : null),
+    annulla: () => reinserisci(riga),
+    verificaRipeti: async () => {
+      const attuale = await leggi();
+      if (!attuale) return null;
+      return valoriUguali(attuale, riga) ? null : "e' stata modificata da qualcun altro nel frattempo";
+    },
+    ripeti: () => cancella(),
+  };
+}
+
+// Piu' scritture che per l'utente sono UN solo gesto (es. l'invito dalla Lista Nomi:
+// segna il nome come invitato E crea il prospect). Si verificano TUTTE prima di
+// scrivere qualunque cosa: o si annulla tutto, o niente. Annullarne meta' lascerebbe
+// dati incoerenti (un nome "invitato" senza prospect).
+export function azioneComposta(etichetta, azioni) {
+  const inverse = [...azioni].reverse();
+  const verificaTutte = async (lista, metodo) => {
+    for (const a of lista) { const p = await a[metodo](); if (p) return p; }
+    return null;
+  };
+  return {
+    etichetta,
+    verificaAnnulla: () => verificaTutte(inverse, "verificaAnnulla"),
+    annulla: async () => { for (const a of inverse) await a.annulla(); },
+    verificaRipeti: () => verificaTutte(azioni, "verificaRipeti"),
+    ripeti: async () => { for (const a of azioni) await a.ripeti(); },
+  };
+}
+
+// I due pulsanti. Il tooltip dice COSA verra' annullato: in un CRM condiviso una
+// freccia che non dichiara cosa fa e' peggio di nessuna freccia.
+export function FrecceCronologia({ cronologia }) {
+  if (!cronologia) return null;
+  const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
+  const cmd = mac ? "\u2318" : "Ctrl+";
+  const puoA = cronologia.puoAnnullare && !cronologia.occupato;
+  const puoR = cronologia.puoRipetere && !cronologia.occupato;
+  const stile = attivo => ({
+    width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center",
+    borderRadius: 10, border: "1px solid var(--border2)", background: "var(--bg3)",
+    color: attivo ? "var(--text)" : "var(--border2)", cursor: attivo ? "pointer" : "default",
+    opacity: attivo ? 1 : .55, padding: 0, fontFamily: "inherit",
+  });
+  const freccia = specchiata => (
+    <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" style={specchiata ? { transform: "scaleX(-1)" } : undefined}>
+      <path d="M9 14L4 9l5-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      <button type="button" onClick={cronologia.annulla} disabled={!puoA} aria-label="Annulla l'ultima modifica"
+        title={cronologia.puoAnnullare ? "Annulla: " + cronologia.etichettaAnnulla + "  (" + cmd + "Z)" : "Niente da annullare"}
+        style={stile(puoA)}>{freccia(false)}</button>
+      <button type="button" onClick={cronologia.ripeti} disabled={!puoR} aria-label="Ripeti la modifica annullata"
+        title={cronologia.puoRipetere ? "Ripeti: " + cronologia.etichettaRipeti + "  (" + cmd + "\u21e7Z)" : "Niente da ripetere"}
+        style={stile(puoR)}>{freccia(true)}</button>
+    </div>
+  );
+}

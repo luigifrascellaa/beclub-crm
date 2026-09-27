@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import {
   Av, CICLO_NUMS, FASE_CLR, FASE_LABEL, FASI_FUNNEL, FASI_SPECIALI,
   FONTI, INTERESSE, coloreRigaBase,
+  FrecceCronologia,
 } from "../shared";
 
 function chatColor(pct) {
@@ -229,7 +230,7 @@ function RigaGriglia({ p, listaMode, editabile, onOpen, onToggleFase, onSaveNote
   );
 }
 
-export function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, setFFonte, fCiclo, setFCiclo, fCitta, setFCitta, fInteresse, setFInteresse, fPercorso, setFPercorso, fMembro, setFMembro, fSquadra, setFSquadra, sortBy, setSortBy, downline, auth, onOpen, onAdd, onToggleFase, onSaveNote, listaMode, setListaMode, hasTeam }) {
+export function Lista({ prospects, total, search, setSearch, fFase, setFFase, fFonte, setFFonte, fCiclo, setFCiclo, fCitta, setFCitta, fInteresse, setFInteresse, fPercorso, setFPercorso, fMembro, setFMembro, fSquadra, setFSquadra, sortBy, setSortBy, downline, auth, onOpen, onAdd, onToggleFase, onSaveNote, cronologia, listaMode, setListaMode, hasTeam }) {
   // contatori di colonna: contano solo le righe visibili (cioe' filtrate), cosi'
   // il numero risponde sempre alla domanda "quante ne ho fatte in questo filtro"
   const conteggi = {};
@@ -242,6 +243,7 @@ export function Lista({ prospects, total, search, setSearch, fFase, setFFase, fF
           <p style={{color:"var(--muted)",fontSize:12,marginTop:3}}>{prospects.length} di {total} visualizzati</p>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <FrecceCronologia cronologia={cronologia} />
           {hasTeam && (
             <div style={{display:"flex",background:"var(--bg3)",borderRadius:10,padding:4,border:"1px solid var(--border)"}}>
               {["personale","team"].map(m=>(

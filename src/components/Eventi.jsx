@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from "recharts";
-import { Av } from "../shared";
+import { Av, FrecceCronologia, azioneModifica, azioneCreazione, azioneCancellazione, campiCambiati, scegliCampi } from "../shared";
 
 function fmtDate(d) {
   if (!d) return "\u2014";
@@ -328,6 +328,7 @@ function getSquadraRelativeTo(rootId, memberId, allProfiles, positions, cache) {
 export function EventiView({ auth, allProfiles, downline, positions, showToast,
   sbListEventi,
   sbListEventoPersone, sbInsertEventoPersona, sbUpdateEventoPersona, sbDeleteEventoPersona,
+  sbGetEventoPersona, cronologia,
   LUDOVICO_ID, onTicketCountChange }) {
 
   const [eventi, setEventi] = useState([]);
@@ -512,6 +513,55 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
     [eventi, vendutiPerEvento]
   );
 
+  // ─── Scritture con cronologia ───────────────────────────────────────────────
+  // Qui le righe in memoria sono gia' in formato database (select=*): a differenza dei
+  // prospect non serve nessuna conversione, prima e dopo si confrontano direttamente.
+  // Letti dalle azioni al momento dell'undo: le loro closure sono ferme al render in
+  // cui sono state registrate, e nel frattempo l'evento attivo puo' essere cambiato.
+  const eventoAttivoRef = useRef(eventoAttivo); eventoAttivoRef.current = eventoAttivo;
+  const modalRef = useRef(modal); modalRef.current = modal;
+
+  function nomePersona(p) { return (((p && p.nome) || "") + " " + ((p && p.cognome) || "")).trim() || "persona"; }
+  const rigaDa = r => (Array.isArray(r) ? r[0] : r) || null;
+  const leggiPersona = id => () => sbGetEventoPersona(cronologia.token(), id);
+
+  // Allinea la memoria alla riga restituita dal database. `persone` (evento attivo) e
+  // `tuttiVenduti` (tutti gli eventi, solo i venduti) contengono la stessa riga e vanno
+  // aggiornati insieme; una riga entra o esce dai venduti se cambia `stato`.
+  function sincronizzaPersona(riga) {
+    if (!riga) return;
+    setPersone(ps => ps.some(x => x.id === riga.id)
+      ? ps.map(x => x.id === riga.id ? riga : x)
+      : (riga.evento_id === eventoAttivoRef.current ? [...ps, riga] : ps));
+    setTuttiVenduti(tv => {
+      const senza = tv.filter(x => x.id !== riga.id);
+      return riga.stato === "venduto" ? [...senza, riga] : senza;
+    });
+  }
+
+  function rimuoviPersonaLocale(id) {
+    // se la sua scheda e' aperta la si chiude: salvarla dopo scriverebbe su una riga che non c'e' piu'
+    if (modalRef.current && modalRef.current.persona && modalRef.current.persona.id === id) setModal(null);
+    setPersone(ps => ps.filter(x => x.id !== id));
+    setTuttiVenduti(tv => tv.filter(x => x.id !== id));
+  }
+
+  // Scrive SOLO i campi davvero cambiati e registra l'azione nella cronologia.
+  async function scriviPersona(prima, patch, etichetta) {
+    const chiavi = campiCambiati(scegliCampi(prima, Object.keys(patch)), patch);
+    if (!chiavi.length) return null;
+    const vPrima = scegliCampi(prima, chiavi), vDopo = scegliCampi(patch, chiavi);
+    const id = prima.id;
+    const riga = rigaDa(await sbUpdateEventoPersona(auth.token, id, vDopo)) || { ...prima, ...vDopo };
+    sincronizzaPersona(riga);
+    if (cronologia) cronologia.registra(azioneModifica({
+      etichetta, leggi: leggiPersona(id),
+      scrivi: async v => sincronizzaPersona(rigaDa(await sbUpdateEventoPersona(cronologia.token(), id, v))),
+      prima: vPrima, dopo: vDopo,
+    }));
+    return riga;
+  }
+
   async function salvaPersona(form) {
     const categoria = form.categoria || "team";
     // La squadra manuale vale per QUALSIASI categoria: serve solo ai conteggi
@@ -526,19 +576,15 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
     const vendutoAt = form.saldo ? (form.venduto_at || new Date().toISOString()) : null;
     try {
       if (form.id) {
-        await sbUpdateEventoPersona(auth.token, form.id, {
+        const prima = persone.find(p => p.id === form.id) || tuttiVenduti.find(p => p.id === form.id) || form;
+        const appenaVenduto = prima.stato !== "venduto" && form.stato === "venduto";
+        await scriviPersona(prima, {
           nome: form.nome, cognome: form.cognome || null, telefono: form.telefono || null,
           instagram: form.instagram || null, citta: form.citta || null, note: form.note || null,
           categoria, sponsor: form.sponsor || null, squadra_manuale: squadraManuale,
           acconto: !!form.acconto, hotel: !!form.hotel, saldo: !!form.saldo, in_forse: !!form.in_forse,
           stato: form.stato, venduto_at: vendutoAt,
-        });
-        const aggiornata = { ...form, categoria, squadra_manuale: squadraManuale, venduto_at: vendutoAt };
-        setPersone(ps => ps.map(p => p.id === form.id ? { ...p, ...aggiornata } : p));
-        setTuttiVenduti(tv => {
-          const senzaQuesta = tv.filter(p => p.id !== form.id);
-          return form.stato === "venduto" ? [...senzaQuesta, { ...aggiornata }] : senzaQuesta;
-        });
+        }, (appenaVenduto ? "Venduto: " : "Scheda di ") + nomePersona(form));
         showToast(form.stato === "venduto" ? "Segnato come venduto" : "Aggiornato");
       } else {
         const assignTo = form._assignTo || auth.userId;
@@ -550,9 +596,18 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
           acconto: !!form.acconto, hotel: !!form.hotel, saldo: !!form.saldo, in_forse: !!form.in_forse,
           stato: form.stato || "in_ballo", venduto_at: vendutoAt,
         });
-        const created = Array.isArray(row) ? row[0] : row;
-        setPersone(ps => [...ps, created]);
-        if (created.stato === "venduto") setTuttiVenduti(tv => [...tv, created]);
+        const created = rigaDa(row);
+        sincronizzaPersona(created);
+        if (cronologia && created) {
+          const cid = created.id;
+          cronologia.registra(azioneCreazione({
+            etichetta: "Aggiunto all'evento: " + nomePersona(created),
+            leggi: leggiPersona(cid),
+            cancella: async () => { await sbDeleteEventoPersona(cronologia.token(), cid); rimuoviPersonaLocale(cid); },
+            reinserisci: async r => sincronizzaPersona(rigaDa(await sbInsertEventoPersona(cronologia.token(), r)) || r),
+            riga: created,
+          }));
+        }
         showToast(assignTo === auth.userId ? "Aggiunto" : "Assegnato a " + ((downline.find(m => m.id === assignTo)?.nome) || "membro"));
       }
     } catch (e) { showToast("Errore: " + e.message, "#ef4444"); }
@@ -570,9 +625,8 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
     const patch = { [key]: val };
     if (key === "saldo") patch.venduto_at = val ? (p.venduto_at || new Date().toISOString()) : null;
     try {
-      await sbUpdateEventoPersona(auth.token, p.id, patch);
-      setPersone(ps => ps.map(x => x.id === p.id ? { ...x, ...patch } : x));
-      setTuttiVenduti(tv => tv.map(x => x.id === p.id ? { ...x, ...patch } : x));
+      const f = FLAG_DEFS.find(x => x.key === key);
+      await scriviPersona(p, patch, (f ? f.label : key) + (val ? " spuntato" : " tolto") + " \u00b7 " + nomePersona(p));
     } catch (e) { showToast("Errore: " + e.message, "#ef4444"); }
   }
 
@@ -582,17 +636,24 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
     const nuova = nota || null;
     if ((p.note || null) === nuova) return;
     try {
-      await sbUpdateEventoPersona(auth.token, p.id, { note: nuova });
-      setPersone(ps => ps.map(x => x.id === p.id ? { ...x, note: nuova } : x));
-      setTuttiVenduti(tv => tv.map(x => x.id === p.id ? { ...x, note: nuova } : x));
+      await scriviPersona(p, { note: nuova }, "Nota di " + nomePersona(p));
     } catch (e) { showToast("Errore: " + e.message, "#ef4444"); }
   }
 
   async function eliminaPersona(id) {
     try {
+      // istantanea grezza prima di cancellare, per poterla ripristinare identica
+      let riga = null;
+      try { riga = await sbGetEventoPersona(auth.token, id); } catch (e) {}
       await sbDeleteEventoPersona(auth.token, id);
-      setPersone(ps => ps.filter(p => p.id !== id));
-      setTuttiVenduti(tv => tv.filter(p => p.id !== id));
+      rimuoviPersonaLocale(id);
+      if (cronologia && riga) cronologia.registra(azioneCancellazione({
+        etichetta: "Eliminato dall'evento: " + nomePersona(riga),
+        leggi: leggiPersona(id),
+        cancella: async () => { await sbDeleteEventoPersona(cronologia.token(), id); rimuoviPersonaLocale(id); },
+        reinserisci: async r => sincronizzaPersona(rigaDa(await sbInsertEventoPersona(cronologia.token(), r)) || r),
+        riga,
+      }));
       showToast("Rimosso", "#ef4444");
     } catch (e) { showToast("Errore: " + e.message, "#ef4444"); }
     setModal(null);
@@ -604,12 +665,15 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
     <div style={{ padding: "2rem 2.2rem", maxWidth: 1280, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.4rem", gap: 12, flexWrap: "wrap" }}>
         <h1 style={{ fontWeight: 900, fontSize: 26, color: "var(--text)", letterSpacing: -0.8 }}>Eventi</h1>
-        {eventoAttivo && (
-          <button onClick={() => setModal({ persona: null, stato: "in_ballo" })}
-            style={{ padding: "11px 22px", fontSize: 14, fontWeight: 800, background: "linear-gradient(135deg,var(--a1),var(--a2))", color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", boxShadow: "0 4px 14px var(--a1-25)" }}>
-            + Aggiungi persona
-          </button>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <FrecceCronologia cronologia={cronologia} />
+          {eventoAttivo && (
+            <button onClick={() => setModal({ persona: null, stato: "in_ballo" })}
+              style={{ padding: "11px 22px", fontSize: 14, fontWeight: 800, background: "linear-gradient(135deg,var(--a1),var(--a2))", color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", boxShadow: "0 4px 14px var(--a1-25)" }}>
+              + Aggiungi persona
+            </button>
+          )}
+        </div>
       </div>
 
       {eventi.length === 0 && !loading ? (

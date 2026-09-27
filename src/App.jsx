@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell, PieChart, Pie } from "recharts";
 import { TeamView } from "./components/Team";
 import { ProfiloView } from "./components/Profilo";
@@ -16,6 +16,8 @@ import {
   CICLI, CICLO_CORRENTE, CICLO_NUMS, cicloOfDate, cicloLabel, dataByCiclo,
   buildStorico, fillGapsStorico, reachedInCiclo, reachedEver, highestReached,
   genId, today, isOver, isToday, fmt, eta, teamStats, Av,
+  azioneModifica, azioneCreazione, azioneCancellazione, azioneComposta,
+  campiCambiati, scegliCampi,
 } from "./shared";
 
 const SB_URL = "https://kuxrpbsvnkxhsicbyupp.supabase.co";
@@ -118,6 +120,9 @@ const sbListEventoPersone = (tok, eventoId) => sbFetch("/rest/v1/evento_persone?
 const sbInsertEventoPersona = (tok, row)    => sbFetch("/rest/v1/evento_persone", { method:"POST", _token:tok, body:JSON.stringify(row) });
 const sbUpdateEventoPersona = (tok, id, row) => sbFetch("/rest/v1/evento_persone?id=eq."+id, { method:"PATCH", _token:tok, body:JSON.stringify(row) });
 const sbDeleteEventoPersona = (tok, id)     => sbFetch("/rest/v1/evento_persone?id=eq."+id, { method:"DELETE", _token:tok });
+// Lettura di una sola riga: la usa la cronologia per verificare che nessun altro l'abbia toccata
+const sbGetEventoPersona    = (tok, id)     => sbFetch("/rest/v1/evento_persone?select=*&id=eq."+id, { _token:tok }).then(r => (r && r[0]) || null);
+const sbGetProspect         = (tok, id)     => sbFetch("/rest/v1/prospects?select=*&id=eq."+id, { _token:tok }).then(r => (r && r[0]) || null);
 
 
 
@@ -634,6 +639,115 @@ function AccessoSospesoScreen({ stato, onLogout }) {
   );
 }
 
+// ─── Cronologia modifiche (frecce indietro/avanti) ─────────────────────────────
+// UNA sola pila per tutto il CRM, non una per sezione: se ce ne fosse una per vista,
+// dopo tre spunte nei prospect e due nei ticket non sapresti piu' quale freccia stai
+// premendo, e annulleresti qualcosa che non e' l'ultima cosa che hai fatto — che e'
+// l'unica aspettativa che le persone hanno davvero da un Cmd+Z.
+//
+// REGOLA: la pila si riempie SOLO dal punto in cui l'utente agisce (chiamando
+// `registra`), mai osservando i cambiamenti di stato. Quando arriveranno gli
+// aggiornamenti dal vivo, lo stato verra' modificato anche da altri: se la pila lo
+// osservasse, dentro ci finirebbe il lavoro dei colleghi, e "indietro" annullerebbe la
+// modifica di un altro facendo finta di annullare la tua.
+function useCronologia({ token, userId, avvisa, limite = 50 }) {
+  const [pile, setPile] = useState({ indietro: [], avanti: [] });
+  const [occupato, setOccupato] = useState(false);
+  const pileRef = useRef(pile); pileRef.current = pile;
+  const occupatoRef = useRef(false);
+  const tokenRef = useRef(token);   tokenRef.current = token;
+  const avvisaRef = useRef(avvisa); avvisaRef.current = avvisa;
+  const gruppoRef = useRef(null);
+
+  // Cambio utente (logout, altro account nella stessa scheda): la pila si svuota.
+  // Le azioni tengono riferimenti ai dati del vecchio utente e non devono sopravvivere.
+  useEffect(() => { setPile({ indietro: [], avanti: [] }); gruppoRef.current = null; }, [userId]);
+
+  const registra = useCallback(azione => {
+    if (gruppoRef.current) { gruppoRef.current.azioni.push(azione); return; }
+    setPile(p => ({ indietro: [...p.indietro, azione].slice(-limite), avanti: [] }));
+  }, [limite]);
+
+  // Raggruppa in UNA voce tutte le scritture fatte dentro `fn` (es. invito dalla Lista
+  // Nomi = nome segnato invitato + prospect creato). Limite noto: un'azione registrata
+  // da un altro click nello stesso istante finirebbe nel gruppo; con gesti umani non
+  // capita in pratica.
+  const gruppo = useCallback(async (etichetta, fn) => {
+    const precedente = gruppoRef.current;
+    const g = { azioni: [] };
+    gruppoRef.current = g;
+    try { return await fn(); }
+    finally {
+      gruppoRef.current = precedente;
+      if (g.azioni.length === 1) registra({ ...g.azioni[0], etichetta });
+      else if (g.azioni.length > 1) registra(azioneComposta(etichetta, g.azioni));
+    }
+  }, [registra]);
+
+  const esegui = useCallback(async direzione => {
+    if (occupatoRef.current) return; // un click alla volta: niente undo sovrapposti
+    const sorgente = direzione === "annulla" ? pileRef.current.indietro : pileRef.current.avanti;
+    if (!sorgente.length) return;
+    const azione = sorgente[sorgente.length - 1];
+    occupatoRef.current = true; setOccupato(true);
+    // rimozione per IDENTITA', non "l'ultima": mentre l'undo e' in corso l'utente puo'
+    // aver fatto un'altra azione, e togliere l'ultima toglierebbe quella
+    const senza = lista => lista.filter(a => a !== azione);
+    try {
+      const problema = direzione === "annulla" ? await azione.verificaAnnulla() : await azione.verificaRipeti();
+      if (problema) {
+        // Non piu' reversibile in sicurezza: la si toglie, cosi' non blocca le azioni
+        // precedenti, e lo si dice chiaramente invece di fallire in silenzio.
+        setPile(q => direzione === "annulla" ? { ...q, indietro: senza(q.indietro) } : { ...q, avanti: senza(q.avanti) });
+        avvisaRef.current("Impossibile " + (direzione === "annulla" ? "annullare" : "ripetere") + " \u00ab" + azione.etichetta + "\u00bb: " + problema, "#ef4444");
+        return;
+      }
+      if (direzione === "annulla") await azione.annulla(); else await azione.ripeti();
+      setPile(q => direzione === "annulla"
+        ? { indietro: senza(q.indietro), avanti: [...q.avanti, azione] }
+        : { indietro: [...q.indietro, azione], avanti: senza(q.avanti) });
+      avvisaRef.current((direzione === "annulla" ? "Annullato: " : "Ripetuto: ") + azione.etichetta);
+    } catch (e) {
+      avvisaRef.current("Errore: " + e.message, "#ef4444");
+    } finally {
+      occupatoRef.current = false; setOccupato(false);
+    }
+  }, []);
+
+  // Cmd+Z / Cmd+Shift+Z (Ctrl+Z / Ctrl+Y su Windows). Dentro un campo di testo il
+  // tasto resta al browser: li' Cmd+Z deve annullare il testo che stai scrivendo,
+  // non l'ultima modifica del CRM.
+  useEffect(() => {
+    function tasto(e) {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      const k = (e.key || "").toLowerCase();
+      const annullare = k === "z" && !e.shiftKey;
+      const ripetere = (k === "z" && e.shiftKey) || (k === "y" && e.ctrlKey && !e.metaKey);
+      if (!annullare && !ripetere) return;
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      e.preventDefault();
+      esegui(annullare ? "annulla" : "ripeti");
+    }
+    window.addEventListener("keydown", tasto);
+    return () => window.removeEventListener("keydown", tasto);
+  }, [esegui]);
+
+  return useMemo(() => ({
+    registra, gruppo,
+    annulla: () => esegui("annulla"),
+    ripeti: () => esegui("ripeti"),
+    // il token si legge AL MOMENTO dell'undo, non quando l'azione e' stata registrata:
+    // annullando dopo un'ora il token di allora sarebbe scaduto (401 = fuori dal CRM)
+    token: () => tokenRef.current,
+    occupato,
+    puoAnnullare: pile.indietro.length > 0,
+    puoRipetere: pile.avanti.length > 0,
+    etichettaAnnulla: pile.indietro.length ? pile.indietro[pile.indietro.length - 1].etichetta : "",
+    etichettaRipeti: pile.avanti.length ? pile.avanti[pile.avanti.length - 1].etichetta : "",
+  }), [registra, gruppo, esegui, occupato, pile]);
+}
+
 export default function App() {
   const [auth, setAuth]           = useState(null);
   const [data, setData]           = useState([]);
@@ -665,6 +779,15 @@ export default function App() {
   const [appMode, setAppMode] = useState("marketer"); // "marketer" | "cliente"
   const [listaMode, setListaMode] = useState("personale");
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false); // solo mobile: sidebar come drawer scorrevole
+
+  // Pila unica delle modifiche. DEVE stare prima del `return` anticipato del login:
+  // un hook chiamato solo in certi render viola le regole di React e manda in crash.
+  // showToast e' una function declaration piu' sotto: e' gia' disponibile qui (hoisting).
+  const cronologia = useCronologia({ token: auth?.token, userId: auth?.userId, avvisa: showToast });
+  // Letti dalle azioni della cronologia al momento dell'undo (le loro closure sono
+  // ferme al render in cui sono state registrate).
+  const selRef = useRef(sel);   selRef.current = sel;
+  const formRef = useRef(form); formRef.current = form;
 
   useEffect(()=>{
     const el=document.createElement("style");
@@ -883,6 +1006,91 @@ export default function App() {
     setAuth(null); setData([]); setReady(true);
   }
 
+  // ─── Scritture sui prospect, con cronologia ────────────────────────────────
+  function nomeProspect(p) { return (((p && p.nome) || "") + " " + ((p && p.cognome) || "")).trim() || "prospect"; }
+
+  // Fonde campi in formato database nella copia in memoria, ovunque stia il prospect
+  // (personali, downline, dettaglio aperto). I campi "_" restano quelli che c'erano.
+  function applicaProspectLocale(id, campiDB) {
+    const fondi = x => ({ ...x, ...toApp({ ...toDB(x, null), ...campiDB }) });
+    setData(d => d.map(x => x.id === id ? fondi(x) : x));
+    setDlProspects(d => d.map(x => x.id === id ? fondi(x) : x));
+    setSel(s => s && s.id === id ? fondi(s) : s);
+  }
+
+  function rimuoviProspectLocale(id) {
+    // Se e' aperto nel dettaglio o in modifica si chiude il modale: DetailModal viene
+    // montato con p={sel} senza controlli, e con sel nullo l'app andrebbe in crash.
+    if ((selRef.current && selRef.current.id === id) || (formRef.current && formRef.current.id === id)) closeModal();
+    setData(d => d.filter(x => x.id !== id));
+    setDlProspects(d => d.filter(x => x.id !== id));
+  }
+
+  function aggiungiProspectLocale(riga) {
+    const app = toApp(riga);
+    if (riga.user_id === auth.userId) {
+      setData(d => d.some(x => x.id === app.id) ? d : [...d, app]);
+    } else {
+      const m = downline.find(x => x.id === riga.user_id);
+      setDlProspects(d => d.some(x => x.id === app.id) ? d : [...d, { ...app, _userId: riga.user_id, _ownerName: (m?.nome||"") + " " + (m?.cognome||"") }]);
+    }
+  }
+
+  // Unico punto di scrittura delle MODIFICHE ai prospect. Scrive solo i campi davvero
+  // cambiati: prima ogni modifica riscriveva l'intera riga con toDB, e con piu' persone
+  // sugli stessi prospect cancellava in silenzio i campi appena cambiati da un collega.
+  async function scriviProspect(prima, dopo, etichetta) {
+    const uid = prima._userId || auth.userId;
+    const dbPrima = toDB(prima, uid), dbDopo = toDB(dopo, uid);
+    const chiavi = campiCambiati(dbPrima, dbDopo).filter(k => k !== "id" && k !== "user_id");
+    if (!chiavi.length) return false;
+    const vPrima = scegliCampi(dbPrima, chiavi), vDopo = scegliCampi(dbDopo, chiavi);
+    const id = prima.id;
+    await sbUpdate(auth.token, id, vDopo);
+    applicaProspectLocale(id, vDopo);
+    cronologia.registra(azioneModifica({
+      etichetta,
+      leggi: () => sbGetProspect(cronologia.token(), id),
+      scrivi: async v => { await sbUpdate(cronologia.token(), id, v); applicaProspectLocale(id, v); },
+      prima: vPrima, dopo: vDopo,
+    }));
+    return true;
+  }
+
+  async function creaProspect(np, ownerId, etichetta) {
+    const r = await sbInsert(auth.token, toDB(np, ownerId));
+    const creata = (Array.isArray(r) ? r[0] : r) || toDB(np, ownerId);
+    aggiungiProspectLocale(creata);
+    const id = creata.id;
+    cronologia.registra(azioneCreazione({
+      etichetta,
+      leggi: () => sbGetProspect(cronologia.token(), id),
+      cancella: async () => { await sbDelete(cronologia.token(), id); rimuoviProspectLocale(id); },
+      reinserisci: async riga => { await sbInsert(cronologia.token(), riga); aggiungiProspectLocale(riga); },
+      riga: creata,
+    }));
+  }
+
+  async function eliminaProspect(p, etichetta) {
+    // Istantanea della riga GREZZA prima di cancellare: toApp non conserva ne' user_id ne'
+    // created_at, quindi ripristinare dalla copia in memoria cambierebbe proprietario e
+    // posizione in lista. Se non si riesce a leggerla la cancellazione avviene comunque,
+    // semplicemente non sara' annullabile.
+    let riga = null;
+    try { riga = await sbGetProspect(auth.token, p.id); } catch(e) {}
+    await sbDelete(auth.token, p.id);
+    rimuoviProspectLocale(p.id);
+    if (!riga) return;
+    const id = p.id;
+    cronologia.registra(azioneCancellazione({
+      etichetta,
+      leggi: () => sbGetProspect(cronologia.token(), id),
+      cancella: async () => { await sbDelete(cronologia.token(), id); rimuoviProspectLocale(id); },
+      reinserisci: async r => { await sbInsert(cronologia.token(), r); aggiungiProspectLocale(r); },
+      riga,
+    }));
+  }
+
   async function saveForm() {
     if (!form.nome?.trim()) return;
     if (form.fase === "SUB" && !form.pacchetto) { showToast("Seleziona il pacchetto per un iscritto ", "#ef4444"); return; }
@@ -896,22 +1104,11 @@ export default function App() {
       if (modal==="add") {
         const assignTo = form._assignTo || auth.userId;
         const np={...record,id:genId()};
-        await sbInsert(auth.token,toDB(np,assignTo));
-        if (assignTo === auth.userId) {
-          setData(d=>[...d,np]);
-        } else {
-          const member = downline.find(m=>m.id===assignTo);
-          setDlProspects(d=>[...d,{...np,_userId:assignTo,_ownerName:(member?.nome||"")+" "+(member?.cognome||"")}]);
-        }
+        await creaProspect(np, assignTo, "Nuovo prospect: " + nomeProspect(np));
         showToast(assignTo===auth.userId?"Prospect aggiunto ":"Prospect assegnato a "+((downline.find(m=>m.id===assignTo)?.nome)||"membro"));
       } else {
-        await sbUpdate(auth.token,record.id,toDB(record,ownerId));
-        // aggiorna in data (personali) o dlProspects (team)
-        if (data.find(p=>p.id===record.id)) {
-          setData(d=>d.map(p=>p.id===record.id?record:p));
-        } else {
-          setDlProspects(d=>d.map(p=>p.id===record.id?{...record,_userId:ownerId,_ownerName:p._ownerName}:p));
-        }
+        const prima = data.find(p=>p.id===record.id) || dlProspects.find(p=>p.id===record.id) || { ...record, _userId: ownerId };
+        await scriviProspect(prima, record, "Anagrafica di " + nomeProspect(record));
         showToast("Aggiornato ");
       }
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
@@ -920,8 +1117,8 @@ export default function App() {
 
   async function deleteProp(id) {
     try {
-      await sbDelete(auth.token,id);
-      setData(d=>d.filter(p=>p.id!==id));
+      const p = data.find(x=>x.id===id) || dlProspects.find(x=>x.id===id) || { id };
+      await eliminaProspect(p, "Eliminato: " + nomeProspect(p));
       showToast("Rimosso","#ef4444");
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
     closeModal();
@@ -947,8 +1144,7 @@ export default function App() {
     };
     np.storico = buildStorico(np, "INVITO", np.conosciutoAt);
     try {
-      await sbInsert(auth.token, toDB(np, auth.userId));
-      setData(d=>[...d, np]);
+      await creaProspect(np, auth.userId, "Prospect da Lista Nomi: " + nomeProspect(np));
       showToast((np.nome||"")+" aggiunto ai prospect");
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
   }
@@ -978,14 +1174,10 @@ export default function App() {
       : senza;
     const nuovaFase = FASI_SPECIALI.includes(p.fase) ? p.fase : highestReached({storico});
     const upd = {...p, fase:nuovaFase, storico};
-    // il proprietario resta chi era: passare auth.userId trasferirebbe il prospect
-    // al leader che lo modifica, facendolo sparire dalla lista del suo titolare
-    const ownerId = p._userId || auth.userId;
+    // il proprietario resta p._userId: lo garantisce scriviProspect (passare auth.userId
+    // trasferirebbe il prospect al leader che lo modifica, togliendolo al titolare)
     try {
-      await sbUpdate(auth.token, p.id, toDB(upd, ownerId));
-      setData(d=>d.map(x=>x.id===p.id?upd:x));
-      setDlProspects(d=>d.map(x=>x.id===p.id?{...upd,_userId:x._userId,_ownerName:x._ownerName}:x));
-      setSel(s=>s&&s.id===p.id?upd:s);
+      await scriviProspect(p, upd, FASE_LABEL[fase] + (spuntata ? " spuntato" : " tolto") + " \u00b7 " + nomeProspect(p));
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
   }
 
@@ -993,12 +1185,8 @@ export default function App() {
     if (!puoModificareGriglia(p)) return;
     if ((p.note||"") === (note||"")) return; // niente scrittura se non e' cambiato nulla
     const upd = {...p, note};
-    const ownerId = p._userId || auth.userId;
     try {
-      await sbUpdate(auth.token, p.id, toDB(upd, ownerId));
-      setData(d=>d.map(x=>x.id===p.id?upd:x));
-      setDlProspects(d=>d.map(x=>x.id===p.id?{...upd,_userId:x._userId,_ownerName:x._ownerName}:x));
-      setSel(s=>s&&s.id===p.id?upd:s);
+      await scriviProspect(p, upd, "Nota di " + nomeProspect(p));
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
   }
 
@@ -1008,11 +1196,8 @@ export default function App() {
     const next=FASI_FUNNEL[i+1];
     const storico=buildStorico(p,next,today());
     const upd={...p,fase:next,storico};
-    const ownerId = p._userId || auth.userId;
     try {
-      await sbUpdate(auth.token,p.id,toDB(upd,ownerId));
-      setData(d=>d.map(x=>x.id===p.id?upd:x));
-      setDlProspects(d=>d.map(x=>x.id===p.id?{...upd,_userId:x._userId,_ownerName:x._ownerName}:x));
+      await scriviProspect(p, upd, "Avanzato a " + FASE_LABEL[next] + " \u00b7 " + nomeProspect(p));
       setSel(upd); showToast("→ "+FASE_LABEL[next]);
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
   }
@@ -1020,11 +1205,8 @@ export default function App() {
   async function moveFase(p,fase) {
     const newFase=fase==="RIATTIVA"?highestReached(p):fase;
     const upd={...p,fase:newFase};
-    const ownerId = p._userId || auth.userId;
     try {
-      await sbUpdate(auth.token,p.id,toDB(upd,ownerId));
-      setData(d=>d.map(x=>x.id===p.id?upd:x));
-      setDlProspects(d=>d.map(x=>x.id===p.id?{...upd,_userId:x._userId,_ownerName:x._ownerName}:x));
+      await scriviProspect(p, upd, (FASE_LABEL[newFase] || newFase) + " \u00b7 " + nomeProspect(p));
       setSel(upd);
       showToast(fase==="DA_RISENTIRE"?" Da risentire":fase==="DA_RIFISSARE"?" Da rifissare":fase==="NON_INT"?" Non interessato":fase==="NON_PIACE"?" Non mi piace":"↩ Riattivato",
         fase==="DA_RISENTIRE"?"#c084fc":fase==="DA_RIFISSARE"?"#6366f1":fase==="NON_INT"?"#6b7280":fase==="NON_PIACE"?"#ec4899":"var(--a1)");
@@ -1033,24 +1215,18 @@ export default function App() {
 
   async function updateProfilo(id,profilazione) {
     const p=data.find(x=>x.id===id)||dlProspects.find(x=>x.id===id); if (!p) return;
-    const ownerId=p._userId||auth.userId;
     const upd={...p,profilazione};
     try {
-      await sbUpdate(auth.token,id,toDB(upd,ownerId));
-      if (data.find(x=>x.id===id)) setData(d=>d.map(x=>x.id===id?upd:x));
-      else setDlProspects(d=>d.map(x=>x.id===id?{...upd,_userId:ownerId,_ownerName:x._ownerName}:x));
+      await scriviProspect(p, upd, "Profilazione di " + nomeProspect(p));
       setSel(upd);
     } catch(e) { showToast("Errore salvataggio","#ef4444"); }
   }
 
   async function updateChecklist(id, checklist) {
     const p=data.find(x=>x.id===id)||dlProspects.find(x=>x.id===id); if (!p) return;
-    const ownerId=p._userId||auth.userId;
     const upd={...p,checklist};
     try {
-      await sbUpdate(auth.token,id,toDB(upd,ownerId));
-      if (data.find(x=>x.id===id)) setData(d=>d.map(x=>x.id===id?upd:x));
-      else setDlProspects(d=>d.map(x=>x.id===id?{...upd,_userId:ownerId,_ownerName:x._ownerName}:x));
+      await scriviProspect(p, upd, "Checklist di " + nomeProspect(p));
       setSel(upd);
     } catch(e) { showToast("Errore salvataggio","#ef4444"); }
   }
@@ -1060,12 +1236,9 @@ export default function App() {
   // ovunque si trovi (nella lista tua o di un altro downline), non solo i CV che il membro produce.
   async function linkProfilo(prospectId, profileId) {
     const p=data.find(x=>x.id===prospectId)||dlProspects.find(x=>x.id===prospectId); if (!p) return;
-    const ownerId=p._userId||auth.userId;
     const upd={...p,convertedProfileId:profileId};
     try {
-      await sbUpdate(auth.token,prospectId,toDB(upd,ownerId));
-      if (data.find(x=>x.id===prospectId)) setData(d=>d.map(x=>x.id===prospectId?upd:x));
-      else setDlProspects(d=>d.map(x=>x.id===prospectId?{...upd,_userId:ownerId,_ownerName:x._ownerName}:x));
+      await scriviProspect(p, upd, (profileId ? "Collegamento di " : "Scollegamento di ") + nomeProspect(p));
       setSel(upd);
       showToast(profileId?"Collegato al membro":"Scollegato");
     } catch(e) { showToast("Errore salvataggio","#ef4444"); }
@@ -1073,7 +1246,6 @@ export default function App() {
 
   async function deleteStorico(id, faseToRemove) {
     const p=data.find(x=>x.id===id)||dlProspects.find(x=>x.id===id); if (!p) return;
-    const ownerId=p._userId||auth.userId;
     const newStorico = p.storico.filter(s=>s.fase!==faseToRemove);
     // Calcola la nuova fase (l'ultima rimasta nello storico)
     const FASI_ORDER = ["INVITO","FISSATO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB","DA_RISENTIRE","DA_RIFISSARE","NON_INT","NON_PIACE"];
@@ -1084,9 +1256,7 @@ export default function App() {
     }, newStorico[0]?.fase || "INVITO");
     const upd = {...p, storico:newStorico, fase:lastFase};
     try {
-      await sbUpdate(auth.token,id,toDB(upd,ownerId));
-      if (data.find(x=>x.id===id)) setData(d=>d.map(x=>x.id===id?upd:x));
-      else setDlProspects(d=>d.map(x=>x.id===id?{...upd,_userId:ownerId,_ownerName:x._ownerName}:x));
+      await scriviProspect(p, upd, "Rimossa " + (FASE_LABEL[faseToRemove] || faseToRemove) + " \u00b7 " + nomeProspect(p));
       setSel(upd);
       showToast("Fase rimossa");
     } catch(e) { showToast("Errore","#ef4444"); }
@@ -1094,14 +1264,11 @@ export default function App() {
 
   async function updateStoricoData(id, fase, newData, newFase, newStorico) {
     const p=data.find(x=>x.id===id)||dlProspects.find(x=>x.id===id); if (!p) return;
-    const ownerId=p._userId||auth.userId;
     const updStorico = newStorico || p.storico.map(s=>s.fase===fase?{...s,data:newData}:s);
     const updFase = newFase || p.fase;
     const upd = {...p, storico:updStorico, fase:updFase};
     try {
-      await sbUpdate(auth.token,id,toDB(upd,ownerId));
-      if (data.find(x=>x.id===id)) setData(d=>d.map(x=>x.id===id?upd:x));
-      else setDlProspects(d=>d.map(x=>x.id===id?{...upd,_userId:ownerId,_ownerName:x._ownerName}:x));
+      await scriviProspect(p, upd, "Data storico di " + nomeProspect(p));
       setSel(upd);
       showToast("Aggiornato");
     } catch(e) { showToast("Errore","#ef4444"); }
@@ -1422,14 +1589,15 @@ export default function App() {
         ) : (
           <>
             {view==="dash"  && <Dash cd={cd} cdSub={cdSub} cdAct={cdAct} cdFU={cdFU} cdNI={cdNI} cdConv={cdConv} cdChiusi={cdChiusi} cdForzaChiusura={cdForzaChiusura} totSub={totSub} totConv={totConv} totAll={dashData.length} funnelCounts={funnelCounts} funnelMax={funnelMax} urgenti={urgenti} dashCiclo={dashCiclo} setDashCiclo={setDashCiclo} onOpen={openDetail} dashMode={dashMode} setDashMode={setDashMode} hasTeam={dlProspects.length>0} ticketVenduti={ticketVendutiCount} mentoreInsights={mentoreInsights} squadre={squadre} />}
-            {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} fSquadra={fSquadra} setFSquadra={setFSquadra} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} onToggleFase={toggleFaseGrid} onSaveNote={salvaNoteGrid} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale"){setFMembro("");setFSquadra("");}}} hasTeam={dlProspects.length>0} />}
+            {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} fSquadra={fSquadra} setFSquadra={setFSquadra} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} onToggleFase={toggleFaseGrid} onSaveNote={salvaNoteGrid} cronologia={cronologia} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale"){setFMembro("");setFSquadra("");}}} hasTeam={dlProspects.length>0} />}
             {view==="stats"   && <Statistiche data={data} dlProspects={dlProspectsAttivi} auth={auth} allProfiles={allProfiles} positions={positions} />}
             {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} onToggleMarketer={toggleMarketerUnlocked} onSetStatoMembro={setStatoMembro} onRimborsaMembro={rimborsaMembro} />}
-            {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} />}
+            {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} cronologia={cronologia} />}
             {view==="eventi"  && <EventiView auth={auth} allProfiles={allProfiles} downline={downline} positions={positions} showToast={showToast}
               sbListEventi={sbListEventi}
               sbListEventoPersone={sbListEventoPersone} sbInsertEventoPersona={sbInsertEventoPersona}
               sbUpdateEventoPersona={sbUpdateEventoPersona} sbDeleteEventoPersona={sbDeleteEventoPersona}
+              sbGetEventoPersona={sbGetEventoPersona} cronologia={cronologia}
               LUDOVICO_ID={LUDOVICO_ID} onTicketCountChange={setTicketVendutiCount} />}
             {view==="profilo" && <ProfiloView auth={auth} onUpdateProfile={updateProfile} downlineCount={downlineAttiva.length} showToast={showToast} />}
           </>

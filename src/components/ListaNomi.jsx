@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { FrecceCronologia, azioneModifica, azioneCreazione, azioneCancellazione, campiCambiati, scegliCampi } from "../shared";
 
 const SB_URL = "https://kuxrpbsvnkxhsicbyupp.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1eHJwYnN2bmt4aHNpY2J5dXBwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNzMwODIsImV4cCI6MjA5NzY0OTA4Mn0.s_lqOUC8939I2Wgf-Qkcq9WaiH1Nxze1uv4-PIV6s7I";
@@ -23,6 +24,8 @@ const sbListaNomi = (tok, uid) => sbFetch("/rest/v1/lista_nomi?select=*&user_id=
 const sbInsertNome = (tok, row) => sbFetch("/rest/v1/lista_nomi", { method:"POST", _token:tok, body:JSON.stringify(row) });
 const sbUpdateNome = (tok, id, row) => sbFetch("/rest/v1/lista_nomi?id=eq."+id, { method:"PATCH", _token:tok, body:JSON.stringify(row) });
 const sbDeleteNome = (tok, id) => sbFetch("/rest/v1/lista_nomi?id=eq."+id, { method:"DELETE", _token:tok });
+// Lettura di una sola riga: la usa la cronologia per verificare che nessun altro l'abbia toccata
+const sbGetNome = (tok, id) => sbFetch("/rest/v1/lista_nomi?select=*&id=eq."+id, { _token:tok }).then(r => (r && r[0]) || null);
 
 const PLEASURES = [
   { key:"tempo", label:"Tempo" },
@@ -202,7 +205,7 @@ function PersonaModal({ persona, onSave, onClose, onDelete, onInvita, isEdit }) 
   );
 }
 
-export function ListaNomiView({ auth, onInvitaProspect }) {
+export function ListaNomiView({ auth, onInvitaProspect, cronologia }) {
   const [lista, setLista] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -221,18 +224,57 @@ export function ListaNomiView({ auth, onInvitaProspect }) {
     }).catch(e=>showToast("Errore: "+e.message,"#ef4444")).finally(()=>setLoading(false));
   }, [auth?.userId, auth?.profile]); // non [auth]: il rinnovo orario del token crea un nuovo oggetto auth e ricaricherebbe tutto
 
+  // ─── Scritture con cronologia ───────────────────────────────────────────────
+  const selRef = useRef(sel); selRef.current = sel;
+  const rigaDa = r => (Array.isArray(r) ? r[0] : r) || null;
+  const leggiNome = id => () => sbGetNome(cronologia.token(), id);
+  function nomeDi(x) { return (((x && x.nome) || "") + " " + ((x && x.cognome) || "")).trim() || "nome"; }
+  function sincronizzaNome(riga) {
+    if (!riga) return;
+    setLista(l => l.some(x => x.id === riga.id) ? l.map(x => x.id === riga.id ? riga : x) : [riga, ...l]);
+  }
+  function rimuoviNomeLocale(id) {
+    if (selRef.current && selRef.current.id === id) { setModal(null); setSel(null); }
+    setLista(l => l.filter(x => x.id !== id));
+  }
+  // Scrive SOLO i campi davvero cambiati e registra l'azione nella cronologia.
+  async function scriviNome(prima, patch, etichetta) {
+    const chiavi = campiCambiati(scegliCampi(prima, Object.keys(patch)), patch);
+    if (!chiavi.length) return null;
+    const vPrima = scegliCampi(prima, chiavi), vDopo = scegliCampi(patch, chiavi);
+    const id = prima.id;
+    const riga = rigaDa(await sbUpdateNome(auth.token, id, vDopo)) || { ...prima, ...vDopo };
+    sincronizzaNome(riga);
+    if (cronologia) cronologia.registra(azioneModifica({
+      etichetta, leggi: leggiNome(id),
+      scrivi: async v => sincronizzaNome(rigaDa(await sbUpdateNome(cronologia.token(), id, v))),
+      prima: vPrima, dopo: vDopo,
+    }));
+    return riga;
+  }
+
   async function savPersona(form) {
     if (!form.nome?.trim()) return;
     try {
       if (modal === "add") {
         const row = { id:genId(), user_id:auth.userId, nome:form.nome, cognome:form.cognome||null, citta:form.citta||null, telefono:form.telefono||null, instagram:form.instagram||null, note:form.note||null, profilazione:form.profilazione||{}, invitato:false, temperatura:form.temperatura||null };
-        await sbInsertNome(auth.token, row);
-        setLista(l=>[row,...l]);
+        const creata = rigaDa(await sbInsertNome(auth.token, row)) || row;
+        sincronizzaNome(creata);
+        if (cronologia) {
+          const cid = creata.id;
+          cronologia.registra(azioneCreazione({
+            etichetta: "Aggiunto alla Lista Nomi: " + nomeDi(creata),
+            leggi: leggiNome(cid),
+            cancella: async () => { await sbDeleteNome(cronologia.token(), cid); rimuoviNomeLocale(cid); },
+            reinserisci: async r => sincronizzaNome(rigaDa(await sbInsertNome(cronologia.token(), r)) || r),
+            riga: creata,
+          }));
+        }
         showToast("Aggiunto");
       } else {
         const row = { nome:form.nome, cognome:form.cognome||null, citta:form.citta||null, telefono:form.telefono||null, instagram:form.instagram||null, note:form.note||null, profilazione:form.profilazione||{}, temperatura:form.temperatura||null };
-        await sbUpdateNome(auth.token, sel.id, row);
-        setLista(l=>l.map(x=>x.id===sel.id?{...x,...row}:x));
+        const prima = lista.find(x => x.id === sel.id) || sel;
+        await scriviNome(prima, row, "Scheda di " + nomeDi(form));
         showToast("Aggiornato");
       }
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
@@ -241,19 +283,30 @@ export function ListaNomiView({ auth, onInvitaProspect }) {
 
   async function deletPersona() {
     try {
-      await sbDeleteNome(auth.token, sel.id);
-      setLista(l=>l.filter(x=>x.id!==sel.id));
+      const id = sel.id;
+      let riga = null;
+      try { riga = await sbGetNome(auth.token, id); } catch(e) {}
+      await sbDeleteNome(auth.token, id);
+      rimuoviNomeLocale(id);
+      if (cronologia && riga) cronologia.registra(azioneCancellazione({
+        etichetta: "Eliminato dalla Lista Nomi: " + nomeDi(riga),
+        leggi: leggiNome(id),
+        cancella: async () => { await sbDeleteNome(cronologia.token(), id); rimuoviNomeLocale(id); },
+        reinserisci: async r => sincronizzaNome(rigaDa(await sbInsertNome(cronologia.token(), r)) || r),
+        riga,
+      }));
       showToast("Rimosso","#ef4444");
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
     setModal(null); setSel(null);
   }
 
   async function invitaPersona(form) {
-    try {
-      // Segna come invitato nella lista nomi
-      await sbUpdateNome(auth.token, sel.id, { invitato:true });
-      setLista(l=>l.map(x=>x.id===sel.id?{...x,invitato:true}:x));
-      // Copia in prospect
+    // Due scritture (nome segnato invitato + prospect creato in App.jsx) che per te sono
+    // UN solo gesto: raggruppate, si annullano insieme o per niente. Separate, un solo
+    // "indietro" toglierebbe il prospect lasciando il nome marcato come invitato.
+    const esegui = async () => {
+      const prima = lista.find(x => x.id === sel.id) || sel;
+      await scriviNome(prima, { invitato:true }, "Invitato: " + nomeDi(form));
       await onInvitaProspect({
         nome: form.nome,
         cognome: form.cognome||"",
@@ -266,6 +319,10 @@ export function ListaNomiView({ auth, onInvitaProspect }) {
         fase: "INVITO",
         conosciutoAt: today(),
       });
+    };
+    try {
+      if (cronologia) await cronologia.gruppo("Invito di " + nomeDi(form), esegui);
+      else await esegui();
       showToast((form.nome||"")+" spostato in Prospect");
       setModal(null); setSel(null);
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
@@ -291,7 +348,8 @@ export function ListaNomiView({ auth, onInvitaProspect }) {
           <h1 style={{fontWeight:900,fontSize:26,color:"var(--text)",letterSpacing:-0.8}}>Lista Nomi</h1>
           <p style={{color:"var(--muted)",fontSize:12,marginTop:3}}>La tua lista personale — privata, visibile solo a te</p>
         </div>
-        <div style={{display:"flex",gap:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <FrecceCronologia cronologia={cronologia} />
           <a href="https://qrco.de/bgsu0X" target="_blank" rel="noreferrer"
             style={{padding:"9px 18px",fontSize:13,fontWeight:800,background:"var(--bg4)",color:"var(--text)",border:"1px solid var(--border2)",borderRadius:10,cursor:"pointer",textDecoration:"none",display:"flex",alignItems:"center",gap:6}}>
             Memory Jogger
