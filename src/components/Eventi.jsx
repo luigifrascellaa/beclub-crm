@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from "recharts";
-import { Av, tono, FrecceCronologia, azioneModifica, azioneCreazione, azioneCancellazione, campiCambiati, scegliCampi } from "../shared";
+import { Av, tono, contaNeiTotali, FrecceCronologia, azioneModifica, azioneCreazione, azioneCancellazione, campiCambiati, scegliCampi } from "../shared";
 
 function fmtDate(d) {
   if (!d) return "\u2014";
@@ -17,8 +17,11 @@ function flagCount(p) {
 // bosco) perche' risponde alla stessa domanda: "a che punto e' questa persona".
 // I due verdi si separano sulla LUMINOSITA', non sulla tinta — su fondo scuro
 // scurire un colore lo fa sparire, per questo il verde intermedio e' un menta acceso.
-// "in_forse" vince su tutto: un ticket in dubbio non deve sembrare avanzato.
+// "non_viene" (rosso) e "in_forse" (grigio) vincono su tutto: un ticket in dubbio o che
+// non si presentera' non deve sembrare avanzato. Se ci sono entrambi vale "non viene",
+// che e' la notizia piu' forte.
 function coloreTicket(p) {
+  if (p.non_viene) return "#ef4444";
   if (p.in_forse) return "#6b7280";
   const n = flagCount(p);
   if (n >= 3) return "#15803d";
@@ -32,6 +35,7 @@ const FLAG_DEFS = [
   { key: "hotel", label: "Hotel", clr: "#10b981" },
   { key: "saldo", label: "Saldo", clr: "#10b981" },
   { key: "in_forse", label: "In forse", clr: "#6b7280" },
+  { key: "non_viene", label: "Non viene", clr: "#ef4444" },
 ];
 
 // ===== card persona — usata SOLO dalla colonna "In ballo".
@@ -236,7 +240,9 @@ function PersonaModal({ persona, defaultStato, onSave, onClose, onDelete, auth, 
                 ))}
               </div>
               <div style={{ marginTop: 8, fontSize: 11, color: "var(--muted)", lineHeight: 1.4 }}>
-                {form.in_forse
+                {form.non_viene
+                  ? "Segnato \u00abnon viene\u00bb: resta in elenco ma non viene contato nei totali."
+                  : form.in_forse
                   ? "Segnato in forse: il ticket resta in elenco ma non viene contato nei totali."
                   : flagCount(form) + " di 3 completati" + (flagCount(form) >= 3 ? " \u00b7 ticket intero" : "")}
               </div>
@@ -342,7 +348,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   // filtro sul completamento: valori sul CONTEGGIO dei flag ('0'|'1'|'2'|'3'), piu'
   // 'in_forse'. Sono le stesse soglie che decidono il colore della riga, cosi'
   // filtrare equivale a "mostrami solo le righe di questo colore".
-  const [filtroFlag, setFiltroFlag] = useState(""); // "" | '0' | '1' | '2' | '3' | 'in_forse'
+  const [filtroFlag, setFiltroFlag] = useState(""); // "" | '0' | '1' | '2' | '3' | 'in_forse' | 'non_viene'
   // filtri della colonna "In ballo": tenuti separati da quelli dei venduti perche'
   // rispondono a domande diverse (chi devo ancora chiudere, vs chi ha gia' comprato)
   const [ibOrigine, setIbOrigine] = useState("tutti"); // 'tutti' | 'personali' | 'team'
@@ -409,8 +415,12 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
 
   // I ticket "in forse" restano SEMPRE in elenco ma non entrano in nessun conteggio:
   // e' la stessa regola del resto del CRM (escluso dai CALCOLI, mai dalle LISTE).
-  const vendutiReali = useMemo(() => venduti.filter(p => !p.in_forse), [venduti]);
-  const inForseCount = venduti.length - vendutiReali.length;
+  const vendutiReali = useMemo(() => venduti.filter(contaNeiTotali), [venduti]);
+  // Gli esclusi, divisi per motivo. "Non viene" ha la precedenza: chi ha entrambi i flag
+  // si conta una volta sola, come nel colore della riga.
+  const nonVieneCount = venduti.filter(p => p.non_viene).length;
+  const inForseCount = venduti.filter(p => p.in_forse && !p.non_viene).length;
+  const esclusiCount = nonVieneCount + inForseCount;
 
   const vendutiSinistra = useMemo(() => vendutiReali.filter(p => squadraOf[p.id] === "sinistra"), [vendutiReali, squadraOf]);
   const vendutiDestra    = useMemo(() => vendutiReali.filter(p => squadraOf[p.id] === "destra"), [vendutiReali, squadraOf]);
@@ -424,10 +434,12 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
       .filter(p => !filtroSquadra || squadraOf[p.id] === filtroSquadra)
       .filter(p => {
         if (!filtroFlag) return true;
-        if (filtroFlag === "in_forse") return !!p.in_forse;
-        // un "in forse" e' grigio a prescindere dai flag che ha: se comparisse anche
-        // sotto "2 flag" il filtro direbbe una cosa e il colore un'altra
-        if (p.in_forse) return false;
+        // Stessa precedenza del colore: chi ha entrambi i flag compare solo sotto "non
+        // viene". E "non viene" e "in forse" non compaiono mai sotto i filtri per
+        // conteggio: filtro e colore devono dire la stessa cosa.
+        if (filtroFlag === "non_viene") return !!p.non_viene;
+        if (filtroFlag === "in_forse") return !!p.in_forse && !p.non_viene;
+        if (!contaNeiTotali(p)) return false;
         return flagCount(p) === Number(filtroFlag);
       })
       .sort((a, b) => flagCount(a) - flagCount(b)),
@@ -460,7 +472,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   // contenere anche gli "in forse": e' la lista che toggleFlag/salvaNota tengono
   // sincronizzata, e se una riga ne uscisse quando la spunti non potrebbe piu'
   // rientrarci quando la togli.
-  const vendutiContabili = useMemo(() => tuttiVenduti.filter(p => !p.in_forse), [tuttiVenduti]);
+  const vendutiContabili = useMemo(() => tuttiVenduti.filter(contaNeiTotali), [tuttiVenduti]);
 
   // notifica App.jsx col conteggio aggiornato (tu + downline), cosi la Dashboard resta in tempo reale
   useEffect(() => {
@@ -520,6 +532,13 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
   // cui sono state registrate, e nel frattempo l'evento attivo puo' essere cambiato.
   const eventoAttivoRef = useRef(eventoAttivo); eventoAttivoRef.current = eventoAttivo;
   const modalRef = useRef(modal); modalRef.current = modal;
+
+  // `non_viene` si manda solo se la riga lo conosce (cioe' la colonna esiste sul database).
+  // Il database rifiuta per intero una scrittura che nomina una colonna inesistente: senza
+  // questa cautela, un deploy fatto PRIMA di aggiungere la colonna bloccherebbe ogni
+  // salvataggio dei ticket, non solo il nuovo flag. Con la colonna presente ogni riga
+  // caricata la contiene (anche a false), quindi il campo viaggia sempre.
+  const campoNonViene = f => (f.non_viene !== undefined ? { non_viene: !!f.non_viene } : {});
 
   function nomePersona(p) { return (((p && p.nome) || "") + " " + ((p && p.cognome) || "")).trim() || "persona"; }
   const rigaDa = r => (Array.isArray(r) ? r[0] : r) || null;
@@ -583,6 +602,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
           instagram: form.instagram || null, citta: form.citta || null, note: form.note || null,
           categoria, sponsor: form.sponsor || null, squadra_manuale: squadraManuale,
           acconto: !!form.acconto, hotel: !!form.hotel, saldo: !!form.saldo, in_forse: !!form.in_forse,
+          ...campoNonViene(form),
           stato: form.stato, venduto_at: vendutoAt,
         }, (appenaVenduto ? "Venduto: " : "Scheda di ") + nomePersona(form));
         showToast(form.stato === "venduto" ? "Segnato come venduto" : "Aggiornato");
@@ -594,6 +614,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
           instagram: form.instagram || null, citta: form.citta || null, note: form.note || null,
           categoria, sponsor: form.sponsor || null, squadra_manuale: squadraManuale,
           acconto: !!form.acconto, hotel: !!form.hotel, saldo: !!form.saldo, in_forse: !!form.in_forse,
+          ...campoNonViene(form),
           stato: form.stato || "in_ballo", venduto_at: vendutoAt,
         });
         const created = rigaDa(row);
@@ -708,9 +729,9 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "#10b981", textTransform: "uppercase", letterSpacing: .6 }}>Ticket venduti</div>
                   <div style={{ fontSize: 30, fontWeight: 900, color: "#10b981", lineHeight: 1.1 }}>{vendutiReali.length}</div>
-                  {inForseCount > 0 && (
+                  {esclusiCount > 0 && (
                     <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
-                      + {inForseCount} in forse, non {inForseCount === 1 ? "conteggiato" : "conteggiati"}
+                      + {[inForseCount > 0 && inForseCount + " in forse", nonVieneCount > 0 && nonVieneCount + (nonVieneCount === 1 ? " non viene" : " non vengono")].filter(Boolean).join(" \u00b7 ")}, non {esclusiCount === 1 ? "conteggiato" : "conteggiati"}
                     </div>
                   )}
                 </div>
@@ -737,6 +758,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
                     <option value="2">2 flag {"\u00b7"} verde chiaro</option>
                     <option value="3">Completi {"\u00b7"} verde scuro</option>
                     <option value="in_forse">In forse {"\u00b7"} grigio</option>
+                    <option value="non_viene">Non viene {"\u00b7"} rosso</option>
                   </select>
                 </div>
               </div>
@@ -756,7 +778,7 @@ export function EventiView({ auth, allProfiles, downline, positions, showToast,
                   </div>
                 : (
                   <div className="tbl-wrap" style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
                       <thead>
                         <tr>
                           <th style={{ textAlign: "left", color: "var(--muted)", fontWeight: 600, fontSize: 11, padding: "4px 14px 10px", whiteSpace: "nowrap", position: "sticky", left: 0, background: "var(--bg2)", zIndex: 2 }}>Persona</th>

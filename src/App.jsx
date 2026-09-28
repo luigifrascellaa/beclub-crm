@@ -17,7 +17,7 @@ import {
   CICLI, CICLO_CORRENTE, CICLO_NUMS, cicloOfDate, cicloLabel, dataByCiclo,
   buildStorico, fillGapsStorico, reachedInCiclo, reachedEver, highestReached,
   genId, today, isOver, isToday, fmt, eta, teamStats, Av,
-  applyTema, segnaAspetto, tono,
+  applyTema, segnaAspetto, tono, contaNeiTotali,
   azioneModifica, azioneCreazione, azioneCancellazione, azioneComposta,
   campiCambiati, scegliCampi,
 } from "./shared";
@@ -993,11 +993,12 @@ export default function App() {
     if (!auth) { setTicketVendutiCount(0); return; }
     const myTeamIds = new Set([auth.userId, ...downline.map(d=>d.id)]);
     sbListEventoPersone(auth.token, null).then(rows=>{
-      // gli "in forse" non contano da nessuna parte: stessa regola applicata in
-      // Eventi.jsx, che sovrascrive questo valore via onTicketCountChange quando la
-      // vista e' aperta. Se i due filtri divergessero, il KPI cambierebbe a seconda
-      // che tu sia passato o no dalla pagina Eventi.
-      const count = (rows||[]).filter(r => r.stato==="venduto" && !r.in_forse && myTeamIds.has(r.user_id)).length;
+      // gli "in forse" e i "non viene" non contano da nessuna parte: stessa regola, e
+      // stessa FUNZIONE (contaNeiTotali, in shared.jsx), usata in Eventi.jsx, che
+      // sovrascrive questo valore via onTicketCountChange quando la vista e' aperta. Se i
+      // due filtri divergessero, il KPI cambierebbe a seconda che tu sia passato o no
+      // dalla pagina Eventi: per questo non e' piu' scritta a mano in due posti.
+      const count = (rows||[]).filter(r => r.stato==="venduto" && contaNeiTotali(r) && myTeamIds.has(r.user_id)).length;
       setTicketVendutiCount(count);
     }).catch(()=>{});
   },[auth?.userId, auth?.profile, downline]); // non [auth]: vedi il caricamento principale

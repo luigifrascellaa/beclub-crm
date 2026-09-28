@@ -511,3 +511,17 @@ export function tono(hex) {
   if (document.documentElement.dataset.aspetto !== "chiaro") return hex;
   return TONI_CHIARI[(hex || "").toLowerCase()] || hex;
 }
+
+
+// ══════════════════════════════════════════════════════════════
+// EVENTI — chi conta nei totali.
+// Un ticket "in forse" o che "non viene" resta SEMPRE visibile in elenco ma non entra in
+// nessun conteggio: numero dei venduti, Sinistra/Destra, contatori, leaderboard, grafico
+// Andamento e KPI "Ticket evento" della Dashboard. E' la regola "escluso dai CALCOLI,
+// mai dalle LISTE" applicata ai ticket.
+// Sta QUI, in un punto solo, perche' il KPI della Dashboard la usa da due file diversi
+// (App.jsx ed Eventi.jsx): quando ognuno aveva la propria copia del filtro, i due numeri
+// sono finiti fuori allineamento. Funziona sia sulle righe in memoria sia su quelle grezze
+// del database: hanno gli stessi nomi di colonna.
+// ══════════════════════════════════════════════════════════════
+export const contaNeiTotali = p => !!p && !p.in_forse && !p.non_viene;
