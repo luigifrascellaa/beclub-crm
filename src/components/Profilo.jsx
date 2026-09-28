@@ -36,7 +36,7 @@ async function sbFetch(path, opts = {}) {
 
 const sbGetProfileByRef = (tok, code) => sbFetch("/rest/v1/profiles?referral_code=eq." + code + "&select=*", { _token: tok });
 
-export function ProfiloView({ auth, onUpdateProfile, downlineCount }) {
+export function ProfiloView({ auth, onUpdateProfile, onCambiaAspetto, downlineCount }) {
   const p = auth.profile || {};
   const [nome,      setNome]      = useState(p.nome || "");
   const [cognome,   setCognome]   = useState(p.cognome || "");
@@ -147,7 +147,7 @@ export function ProfiloView({ auth, onUpdateProfile, downlineCount }) {
             const attivo = (p.aspetto || "scuro") === k;
             return (
               <button key={k} type="button" aria-pressed={attivo}
-                onClick={async () => { applyTema(p.tema || "blu", k); await onUpdateProfile({ aspetto: k }); }}
+                onClick={() => onCambiaAspetto(k)}
                 style={{ padding: "8px 24px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit", background: attivo ? "var(--bg4)" : "transparent", color: attivo ? "var(--a2)" : "var(--muted)", boxShadow: attivo ? "inset 0 0 0 1px var(--sidebar-border)" : "none" }}>
                 {l}
               </button>

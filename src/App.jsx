@@ -788,6 +788,7 @@ export default function App() {
   // ferme al render in cui sono state registrate).
   const selRef = useRef(sel);   selRef.current = sel;
   const formRef = useRef(form); formRef.current = form;
+  const aspettoInCorso = useRef(false); // un salvataggio dell'aspetto alla volta
 
   useEffect(()=>{
     const el=document.createElement("style");
@@ -1354,6 +1355,39 @@ export default function App() {
   }
 
 
+  // Cambio di aspetto (chiaro/scuro). UNICO punto da cui passano sia l'interruttore nella
+  // sidebar sia i due pulsanti in Profilo. E' OTTIMISTICO: lo stato cambia subito e il
+  // salvataggio segue. Aspettare il database prima di cambiare farebbe sentire lo
+  // switch lento; e cambiare solo i colori senza aggiornare il profilo (come faceva
+  // Profilo) lascia la pagina a meta' se il salvataggio fallisce: variabili chiare ma
+  // toni delle fasi scuri, fino al ricaricamento. Qui, se il salvataggio fallisce, si
+  // torna indietro davvero, con un messaggio.
+  // `valore` opzionale: Profilo passa "chiaro" o "scuro", la sidebar niente (alterna).
+  async function cambiaAspetto(valore) {
+    if (!auth || aspettoInCorso.current) return;
+    const prima = auth.profile?.aspetto === "chiaro" ? "chiaro" : "scuro";
+    const nuovo = valore === "chiaro" || valore === "scuro" ? valore : (prima === "chiaro" ? "scuro" : "chiaro");
+    if (nuovo === prima) return;
+    const imposta = val => setAuth(a => {
+      if (!a) return a;
+      const updated = { ...a, profile: { ...(a.profile || {}), aspetto: val } };
+      if (localStorage.getItem("becrm_session")) localStorage.setItem("becrm_session", JSON.stringify(updated));
+      return updated;
+    });
+    aspettoInCorso.current = true;
+    imposta(nuovo);
+    try {
+      await sbUpdateProfile(auth.token, auth.userId, { aspetto: nuovo });
+    } catch(e) {
+      imposta(prima);
+      showToast(/aspetto/i.test(e.message)
+        ? "Aspetto non salvato: manca la colonna 'aspetto' su Supabase (serve la SQL)"
+        : "Aspetto non salvato: " + e.message, "#ef4444");
+    } finally {
+      aspettoInCorso.current = false;
+    }
+  }
+
   async function updateProfile(fields, silent) {
     try {
       await sbUpdateProfile(auth.token, auth.userId, fields);
@@ -1606,7 +1640,7 @@ export default function App() {
 
       <div className="drawer-scrim" onClick={()=>setMobileDrawerOpen(false)} style={{position:"fixed",inset:0,zIndex:1700,background:"#00000090",opacity:mobileDrawerOpen?1:0,pointerEvents:mobileDrawerOpen?"auto":"none",transition:"opacity .2s ease"}} />
 
-      <Sidebar view={view} setView={v=>{setView(v);setMobileDrawerOpen(false);}} data={data} urgenti={urgenti} onAdd={()=>{openAdd();setMobileDrawerOpen(false);}} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downlineAttiva.length} appMode={appMode} setAppMode={m=>{setAppMode(m);setMobileDrawerOpen(false);}} showToast={showToast} drawerOpen={mobileDrawerOpen} onCloseDrawer={()=>setMobileDrawerOpen(false)} />
+      <Sidebar view={view} setView={v=>{setView(v);setMobileDrawerOpen(false);}} data={data} urgenti={urgenti} onAdd={()=>{openAdd();setMobileDrawerOpen(false);}} onExport={onExport} auth={auth} onLogout={handleLogout} downlineCount={downlineAttiva.length} appMode={appMode} setAppMode={m=>{setAppMode(m);setMobileDrawerOpen(false);}} showToast={showToast} aspetto={aspetto} onCambiaAspetto={cambiaAspetto} drawerOpen={mobileDrawerOpen} onCloseDrawer={()=>setMobileDrawerOpen(false)} />
 
       <main className="mc" style={{flex:1,overflowY:"auto",height:"100vh",paddingBottom:0}}>
         {(appMode==="cliente" || !(auth?.profile?.marketer_unlocked || auth?.profile?.is_leader)) ? (
@@ -1624,7 +1658,7 @@ export default function App() {
               sbUpdateEventoPersona={sbUpdateEventoPersona} sbDeleteEventoPersona={sbDeleteEventoPersona}
               sbGetEventoPersona={sbGetEventoPersona} cronologia={cronologia}
               LUDOVICO_ID={LUDOVICO_ID} onTicketCountChange={setTicketVendutiCount} />}
-            {view==="profilo" && <ProfiloView auth={auth} onUpdateProfile={updateProfile} downlineCount={downlineAttiva.length} showToast={showToast} />}
+            {view==="profilo" && <ProfiloView auth={auth} onUpdateProfile={updateProfile} onCambiaAspetto={cambiaAspetto} downlineCount={downlineAttiva.length} showToast={showToast} />}
           </>
         )}
       </main>
@@ -1669,7 +1703,7 @@ export default function App() {
 }
 
 //  SIDEBAR 
-function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout, downlineCount, appMode, setAppMode, showToast, drawerOpen, onCloseDrawer }) {
+function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout, downlineCount, appMode, setAppMode, showToast, aspetto, onCambiaAspetto, drawerOpen, onCloseDrawer }) {
   const marketerAllowed = !!(auth?.profile?.marketer_unlocked || auth?.profile?.is_leader);
   const navs = [
     { id:"dash",    icon:"", label:"Dashboard" },
@@ -1736,6 +1770,23 @@ function Sidebar({ view, setView, data, urgenti, onAdd, onExport, auth, onLogout
       )}
 
       <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid var(--border)"}}>
+        {/* Interruttore chiaro/scuro. Acceso = aspetto chiaro. E' un <button role="switch">,
+            non un checkbox: cosi' e' raggiungibile da tastiera e letto correttamente dagli
+            screen reader, e non porta con se' lo stile nativo del browser. I colori sono
+            variabili, quindi lo switch si vede bene in entrambi gli aspetti. */}
+        <button type="button" role="switch" aria-checked={aspetto==="chiaro"} onClick={()=>onCambiaAspetto()}
+          title={aspetto==="chiaro"?"Passa all'aspetto scuro":"Passa all'aspetto chiaro"}
+          style={{width:"100%",display:"flex",alignItems:"center",gap:9,padding:"7px 8px",marginBottom:10,background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:9,cursor:"pointer",fontFamily:"inherit"}}>
+          <span style={{display:"flex",color:"var(--muted)"}}>
+            {aspetto==="chiaro"
+              ? <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" strokeWidth="2"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.9 1.9M16.8 16.8l1.9 1.9M18.7 5.3l-1.9 1.9M7.2 16.8l-1.9 1.9" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+              : <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/></svg>}
+          </span>
+          <span style={{flex:1,textAlign:"left",fontSize:12,fontWeight:600,color:"var(--muted)"}}>Aspetto chiaro</span>
+          <span aria-hidden="true" style={{position:"relative",width:32,height:19,borderRadius:99,flexShrink:0,background:aspetto==="chiaro"?"var(--a1)":"var(--border2)",transition:"background .18s ease"}}>
+            <span style={{position:"absolute",top:2,left:aspetto==="chiaro"?15:2,width:15,height:15,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px #00000040",transition:"left .18s ease"}}/>
+          </span>
+        </button>
         <div style={{fontSize:10,color:"var(--muted)",marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{auth?.email}</div>
         <button onClick={onLogout} style={{width:"100%",padding:"8px 10px",background:"#ef444415",color:"#f87171",border:"1px solid #ef444430",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}>Esci</button>
       </div>
