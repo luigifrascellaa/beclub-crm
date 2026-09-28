@@ -8,6 +8,7 @@ import { computeMentoreInsights, ConsigliCard, MentoreChatWidget } from "./compo
 import { ClienteView } from "./components/Cliente";
 import { Dash } from "./components/Dash";
 import { Lista } from "./components/Lista";
+import { registraRinnovo, rinnovaSessione, eTokenScaduto, eErroreRete } from "./sessione";
 import {
   isAttivo, PACCHETTI, bvOfPacchetto,
   FASI_FUNNEL, FASI_DASH, FASI_SPECIALI, FASI, FONTI, FONTE_ICO, INTERESSE, INTERESSE_CLR,
@@ -38,8 +39,19 @@ async function sbFetch(path, opts = {}) {
   if (!res.ok) {
     const e = text ? JSON.parse(text) : {};
     const msg = e.msg || e.error_description || e.message || e.error || res.statusText || "Errore sconosciuto";
-    // Se il token è scaduto, forza logout
-    if (msg.toLowerCase().includes("jwt expired") || msg.toLowerCase().includes("invalid jwt") || res.status === 401) {
+    if (eTokenScaduto(res.status, msg)) {
+      // Prima di arrendersi: rinnova il token e ripete UNA volta la stessa chiamata, in
+      // modo invisibile. E' questo che chiude davvero il problema della sessione scaduta:
+      // non dipende dal prevedere QUANDO scade (Mac in sospensione, scheda congelata,
+      // orologio sfasato), ma dal reagire quando succede. `_riprova` impedisce i cicli.
+      if (opts._token && !opts._riprova) {
+        let nuovo = null, rete = false;
+        try { nuovo = await rinnovaSessione(); } catch (err) { rete = eErroreRete(err); }
+        if (nuovo) return sbFetch(path, { ...opts, _token: nuovo, _riprova: true });
+        // senza connessione non si butta fuori nessuno: si riprova quando torna la rete
+        if (rete) throw new Error("Connessione assente, riprova tra qualche secondo");
+      }
+      // Rinnovo rifiutato o sessione non rinnovabile: la sessione e' morta davvero
       localStorage.removeItem("becrm_session");
       window.location.reload();
     }
@@ -801,60 +813,74 @@ export default function App() {
     if (auth?.profile?.tema) applyTema(auth.profile.tema);
   },[auth?.profile?.tema]);
 
-  // ─── Rinnovo proattivo del token ────────────────────────────────────────────
-  // Un timer che scatta 5 minuti prima della scadenza, piu' un controllo quando la
-  // scheda torna visibile: i timer non girano col portatile in sospensione, e
-  // riaprendolo dopo due ore il primo click arriverebbe prima del timer, dritto nel 401.
+  // ─── Rinnovo del token ─────────────────────────────────────────────────────
+  // COME si rinnova, registrato nel coordinatore di sessione.js: lo usano sia il rinnovo
+  // proattivo qui sotto sia i tre sbFetch quando incontrano un token scaduto, e passando
+  // tutti da li' non si fanno mai due rinnovi in parallelo con lo stesso refresh token.
   // Il rinnovo conserva lo stesso riferimento a `profile` (spread), cosi' gli effetti di
   // caricamento — che dipendono da userId e profile, non dal token — non ripartono.
+  const authRef = useRef(auth); authRef.current = auth;
   useEffect(()=>{
-    if (!auth?.refreshToken || !auth?.expiresAt) return; // sessione vecchia: non rinnovabile
-    let annullato = false;
-    let inCorso = false;
-
-    async function rinnova() {
-      if (inCorso) return; // timer e ritorno sulla scheda possono scattare insieme
-      inCorso = true;
-      try {
-        // Un'altra scheda aperta potrebbe aver gia' rinnovato. In quel caso si adotta la sua
-        // sessione invece di consumare di nuovo lo stesso refresh token: Supabase lo ruota a
-        // ogni uso, e riusarne uno gia' consumato fa scadere la sessione.
-        let salvata = null;
-        try { salvata = JSON.parse(localStorage.getItem("becrm_session") || "null"); } catch(e) {}
-        if (salvata && salvata.userId === auth.userId && salvata.refreshToken
-            && salvata.expiresAt > auth.expiresAt && !staPerScadere(salvata)) {
-          if (!annullato) setAuth(a => a ? { ...a, token:salvata.token, refreshToken:salvata.refreshToken, expiresAt:salvata.expiresAt } : a);
-          return;
-        }
-        const res = await sbRefresh(auth.refreshToken);
-        if (annullato) return;
-        setAuth(a => {
-          if (!a) return a;
-          const s = sessioneDaRisposta(res, a);
-          // si riscrive solo se l'utente aveva scelto "ricordami": altrimenti la sessione
-          // vive solo in memoria e non deve comparire su disco
-          if (localStorage.getItem("becrm_session")) localStorage.setItem("becrm_session", JSON.stringify(s));
-          return s;
-        });
-      } catch(e) {
-        // Refresh token revocato o scaduto: la sessione e' morta, si torna al login.
-        // Niente sbSignOut: col token scaduto finirebbe nel 401 e ricaricherebbe la pagina.
-        if (annullato) return;
-        localStorage.removeItem("becrm_session");
-        setAuth(null); setData([]); setReady(true);
-      } finally {
-        inCorso = false;
+    registraRinnovo(async () => {
+      const a = authRef.current;
+      if (!a || !a.refreshToken) return null; // sessione vecchia: non rinnovabile, si rifa' il login
+      // Un'altra scheda aperta potrebbe aver gia' rinnovato: si adotta la sua sessione
+      // invece di consumare di nuovo lo stesso refresh token (Supabase lo ruota a ogni uso).
+      let salvata = null;
+      try { salvata = JSON.parse(localStorage.getItem("becrm_session") || "null"); } catch(e) {}
+      if (salvata && salvata.userId === a.userId && salvata.refreshToken
+          && salvata.expiresAt > (a.expiresAt || 0) && !staPerScadere(salvata)) {
+        authRef.current = { ...a, token:salvata.token, refreshToken:salvata.refreshToken, expiresAt:salvata.expiresAt };
+        setAuth(x => x ? { ...x, token:salvata.token, refreshToken:salvata.refreshToken, expiresAt:salvata.expiresAt } : x);
+        return salvata.token;
       }
-    }
+      const s = sessioneDaRisposta(await sbRefresh(a.refreshToken), a);
+      // subito, non al prossimo render: una seconda chiamata nello stesso istante deve gia'
+      // vedere il refresh token nuovo, quello vecchio non vale piu'
+      authRef.current = s;
+      // si riscrive solo se l'utente aveva scelto "ricordami"
+      if (localStorage.getItem("becrm_session")) localStorage.setItem("becrm_session", JSON.stringify(s));
+      setAuth(x => x ? { ...x, token:s.token, refreshToken:s.refreshToken, expiresAt:s.expiresAt } : x);
+      return s.token;
+    });
+    return () => registraRinnovo(null);
+  },[]);
 
-    const tra = (auth.expiresAt - RINNOVO_ANTICIPO_S) * 1000 - Date.now();
-    const timer = setTimeout(rinnova, Math.max(0, tra));
-    function controlla() { if (document.visibilityState === "visible" && staPerScadere(auth)) rinnova(); }
+  // Rinnovo PROATTIVO, perche' di norma non si arrivi nemmeno al token scaduto.
+  useEffect(()=>{
+    if (!auth?.refreshToken || !auth?.expiresAt) return;
+    let annullato = false;
+    function esciSessioneMorta() {
+      localStorage.removeItem("becrm_session");
+      setAuth(null); setData([]); setReady(true);
+    }
+    function rinnova() {
+      if (!staPerScadere(authRef.current)) return; // gia' rinnovato da un'altra strada
+      rinnovaSessione()
+        .then(tok => { if (!tok && !annullato) esciSessioneMorta(); })
+        .catch(err => {
+          if (annullato) return;
+          // Errore di rete (wifi non ancora collegato al risveglio): nessun logout, riprova
+          // il controllo successivo. Rinnovo RIFIUTATO dal server: la sessione e' morta.
+          // Niente sbSignOut: col token scaduto finirebbe nel 401.
+          if (!eErroreRete(err)) esciSessioneMorta();
+        });
+    }
+    // 1) timer a 5 minuti dalla scadenza
+    const timer = setTimeout(rinnova, Math.max(0, (auth.expiresAt - RINNOVO_ANTICIPO_S) * 1000 - Date.now()));
+    // 2) controllo sull'ORA VERA ogni 30 secondi. Il timer da solo NON basta: su macOS,
+    //    mentre il Mac dorme, il timer del browser si ferma e riparte in ritardo di tutta la
+    //    durata del sonno. E se Brave era in primo piano quando si e' chiuso il coperchio,
+    //    alla riapertura la scheda non "torna" visibile — non se n'era mai andata — quindi
+    //    visibilitychange e focus non partono. Date.now() invece e' l'ora di parete.
+    const orologio = setInterval(rinnova, 30000);
+    // 3) ritorno sulla scheda o sulla finestra
+    function controlla() { if (document.visibilityState === "visible") rinnova(); }
     document.addEventListener("visibilitychange", controlla);
     window.addEventListener("focus", controlla);
     return () => {
       annullato = true;
-      clearTimeout(timer);
+      clearTimeout(timer); clearInterval(orologio);
       document.removeEventListener("visibilitychange", controlla);
       window.removeEventListener("focus", controlla);
     };

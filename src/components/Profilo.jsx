@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { rinnovaSessione, eTokenScaduto } from "../sessione";
 
 const SB_URL = "https://kuxrpbsvnkxhsicbyupp.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1eHJwYnN2bmt4aHNpY2J5dXBwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNzMwODIsImV4cCI6MjA5NzY0OTA4Mn0.s_lqOUC8939I2Wgf-Qkcq9WaiH1Nxze1uv4-PIV6s7I";
@@ -30,7 +31,18 @@ async function sbFetch(path, opts = {}) {
     },
   });
   const text = await res.text();
-  if (!res.ok) { const e = text ? JSON.parse(text) : {}; throw new Error(e.message || res.statusText); }
+  if (!res.ok) {
+    const e = text ? JSON.parse(text) : {};
+    const msg = e.message || e.msg || res.statusText;
+    // Token scaduto: rinnova (tramite il coordinatore unico di sessione.js, condiviso con
+    // App.jsx) e ripete UNA volta la stessa chiamata, in modo invisibile.
+    if (eTokenScaduto(res.status, msg) && opts._token && !opts._riprova) {
+      let nuovo = null;
+      try { nuovo = await rinnovaSessione(); } catch (err) {}
+      if (nuovo) return sbFetch(path, { ...opts, _token: nuovo, _riprova: true });
+    }
+    throw new Error(e.message || res.statusText);
+  }
   return text ? JSON.parse(text) : null;
 }
 
@@ -50,7 +62,7 @@ export function ProfiloView({ auth, onUpdateProfile, downlineCount }) {
   const [msg, setMsg] = useState(null);
 
   // Carica nome sponsor attuale
-  useState(() => {
+  useEffect(() => {
     if (!p.upline_id || !auth.token) return;
     sbFetch(`/rest/v1/profiles?select=nome,cognome&id=eq.${p.upline_id}`, { _token: auth.token })
       .then(rows => { if (rows?.[0]) setSponsorName((rows[0].nome||"")+" "+(rows[0].cognome||"")); })
