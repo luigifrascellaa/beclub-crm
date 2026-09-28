@@ -1695,7 +1695,7 @@ export default function App() {
         <div onClick={closeModal} style={{position:"fixed",inset:0,background:"#00000090",backdropFilter:"blur(8px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16,animation:"fadeIn .2s"}}>
           <div className={"pop"} onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520,maxHeight:"90vh",overflowY:"auto",borderRadius:"16px"}}>
             {modal==="detail"
-              ? <DetailModal p={sel} onEdit={()=>{setForm({...sel});setModal("edit");}} onAdvance={()=>advanceFase(sel)} onFollowUp={()=>moveFase(sel,"DA_RISENTIRE")} onNonInt={()=>moveFase(sel,"NON_INT")} onNonPiace={()=>moveFase(sel,"NON_PIACE")} onDaRifissare={()=>moveFase(sel,"DA_RIFISSARE")} onRiattiva={()=>moveFase(sel,"RIATTIVA")} onClose={closeModal} onUpdateProfilo={pr=>updateProfilo(sel.id,pr)} onUpdateChecklist={cl=>updateChecklist(sel.id,cl)} onDeleteStorico={fase=>deleteStorico(sel.id,fase)} onUpdateStoricoData={(fase,data,newFase,newStorico)=>updateStoricoData(sel.id,fase,data,newFase,newStorico)} downline={downline} onLinkProfilo={linkProfilo} />
+              ? <DetailModal p={sel} onEdit={()=>{setForm({...sel});setModal("edit");}} onAdvance={()=>advanceFase(sel)} onFollowUp={()=>moveFase(sel,"DA_RISENTIRE")} onNonInt={()=>moveFase(sel,"NON_INT")} onNonPiace={()=>moveFase(sel,"NON_PIACE")} onDaRifissare={()=>moveFase(sel,"DA_RIFISSARE")} onRiattiva={()=>moveFase(sel,"RIATTIVA")} onClose={closeModal} onUpdateProfilo={pr=>updateProfilo(sel.id,pr)} onUpdateChecklist={cl=>updateChecklist(sel.id,cl)} downline={downline} onLinkProfilo={linkProfilo} />
               : <FormModal form={form} setForm={setForm} onSave={saveForm} onClose={closeModal} onDelete={modal==="edit"?()=>deleteProp(form.id):null} isEdit={modal==="edit"} auth={auth} downline={downline} />
             }
           </div>
@@ -2050,15 +2050,12 @@ function ProfilazioneTab({ p, onUpdateProfilo }) {
 }
 
 //  DETAIL MODAL 
-function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, onDaRifissare, onRiattiva, onClose, onUpdateProfilo, onUpdateChecklist, onDeleteStorico, onUpdateStoricoData, downline, onLinkProfilo }) {
+function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, onDaRifissare, onRiattiva, onClose, onUpdateProfilo, onUpdateChecklist, downline, onLinkProfilo }) {
   const [activeTab,setActiveTab]=useState("dettagli");
-  const [stepPopup, setStepPopup]=useState(null); // {fase, date}
-  const [stepDate, setStepDate]=useState("");
   const clr=FASE_CLR[p.fase];const ci=FASI_FUNNEL.indexOf(p.fase);const isSpeciale=FASI_SPECIALI.includes(p.fase);
   const od=isOver(p.followUp);const dt=isToday(p.followUp);const ciclo=cicloOfDate(p.conosciutoAt);
   const lbl={fontSize:10,fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:.8,marginBottom:4};
   const box={background:"var(--bg3)",borderRadius:10,padding:"11px 13px",border:"1px solid var(--border)"};
-  const storico=[...(p.storico||[])].sort((a,b)=>FASI_FUNNEL.indexOf(a.fase)-FASI_FUNNEL.indexOf(b.fase));
   const badge=profiloBadge(p);
   return(
     <div style={{background:"var(--bg2)",border:"1px solid var(--border2)",borderRadius:16,padding:"1.6rem",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 70px #000000aa"}}>
@@ -2086,56 +2083,6 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, o
       </div>
       {activeTab==="dettagli"&&(
         <>
-          {!isSpeciale&&(
-            <div style={{display:"flex",alignItems:"center",marginBottom:20,overflowX:"auto",paddingBottom:4}}>
-              {FASI_FUNNEL.map((f,i)=>(
-                <div key={f} style={{display:"flex",alignItems:"center",flex:i<FASI_FUNNEL.length-1?1:"none",position:"relative"}}>
-                  <div onClick={()=>{
-                    const existing=p.storico?.find(s=>s.fase===f);
-                    setStepDate(existing?.data||today());
-                    setStepPopup(f);
-                  }}
-                    style={{width:38,height:38,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:i<=ci?FASE_CLR[f]:"var(--bg4)",border:"2px solid "+(i===ci?FASE_CLR[f]:i<ci?FASE_CLR[f]+"66":"var(--border2)"),color:i<=ci?"#fff":"var(--muted)",fontSize:7.5,fontWeight:900,boxShadow:i===ci?"0 0 18px "+FASE_CLR[f]+"66":"none",transition:"all .3s",cursor:"pointer"}}>{FASE_LABEL[f]}</div>
-                  {i<FASI_FUNNEL.length-1&&<div style={{flex:1,height:3,background:i<ci?FASE_CLR[FASI_FUNNEL[i+1]]+"66":"var(--bg4)",margin:"0 3px",minWidth:4,borderRadius:99}}/>}
-                </div>
-              ))}
-            </div>
-          )}
-          {stepPopup&&(
-            <div onClick={()=>setStepPopup(null)} style={{position:"fixed",inset:0,zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <div onClick={e=>e.stopPropagation()} style={{background:"var(--bg2)",border:"1px solid var(--border2)",borderRadius:14,padding:"1.2rem 1.4rem",minWidth:260,boxShadow:"0 10px 40px #00000080"}}>
-                <div style={{fontWeight:800,fontSize:14,color:"var(--text)",marginBottom:12}}>
-                  <span style={{color:FASE_CLR[stepPopup]}}>{FASE_LABEL[stepPopup]}</span> — quando?
-                </div>
-                <input type="date" value={stepDate} onChange={e=>setStepDate(e.target.value)} style={{marginBottom:12}} />
-                <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                  <button onClick={()=>setStepPopup(null)} style={{padding:"7px 14px",background:"var(--bg4)",color:"var(--muted)",border:"1px solid var(--border2)",borderRadius:8,cursor:"pointer",fontWeight:600,fontSize:12}}>Annulla</button>
-                  {p.storico?.some(s=>s.fase===stepPopup)&&(
-                    <button onClick={()=>{onDeleteStorico(stepPopup);setStepPopup(null);}} style={{padding:"7px 14px",background:"#ef444415",color:"#f87171",border:"1px solid #ef444430",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:12}}>Rimuovi</button>
-                  )}
-                  <button onClick={()=>{
-                    if(!stepDate)return;
-                    if(p.storico?.some(s=>s.fase===stepPopup)){
-                      onUpdateStoricoData(stepPopup,stepDate);
-                    } else {
-                      // Aggiunge SOLO la fase segnata, senza riempire le precedenti.
-                      // Il riempimento automatico (fillGapsStorico) e' stato tolto: da quando
-                      // la lista prospect e' una griglia a spunte, un buco e' una scelta
-                      // dell'utente e va rispettato anche entrando da qui.
-                      const FASI_ORDER=["INVITO","FISSATO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
-                      const currentIdx=FASI_ORDER.indexOf(p.fase);
-                      const newIdx=FASI_ORDER.indexOf(stepPopup);
-                      const newFase=newIdx>currentIdx?stepPopup:p.fase;
-                      const newStorico=[...(p.storico||[]).filter(s=>s.fase!==stepPopup),{fase:stepPopup,data:stepDate}]
-                        .sort((a,b)=>FASI_FUNNEL.indexOf(a.fase)-FASI_FUNNEL.indexOf(b.fase));
-                      onUpdateStoricoData(stepPopup,stepDate,newFase,newStorico);
-                    }
-                    setStepPopup(null);
-                  }} style={{padding:"7px 14px",background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontWeight:800,fontSize:12}}>Salva</button>
-                </div>
-              </div>
-            </div>
-          )}
           {p.fase==="SUB" && (
             <div style={{...box,marginBottom:9,border:"1px solid "+(p.convertedProfileId?"#8b5cf640":"var(--border)")}}>
               <div style={lbl}>Collegato a membro registrato</div>
@@ -2161,7 +2108,7 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, o
             </div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:9}}>
-            {[{l:"Fase ora",v:FASE_LABEL[p.fase],color:clr},{l:"Ciclo conoscenza",v:ciclo?"Ciclo "+ciclo:"\u2014",color:ciclo===CICLO_CORRENTE?"var(--a1)":undefined},{l:"Conosciuto il",v:fmt(p.conosciutoAt)},{l:"Follow-up",v:p.followUp?(od?"Scaduto \u00b7 ":dt?"Oggi \u00b7 ":"")+fmt(p.followUp):"Non impostato",color:od?"#f87171":dt?tono("#fbbf24"):undefined},...(p.dataNascita?[{l:"Età",v:eta(p.dataNascita)+" anni"}]:[])].map(({l,v,color:col})=>(<div key={l} style={box}><div style={lbl}>{l}</div><div style={{color:col||"var(--text)",fontWeight:700,fontSize:13}}>{v}</div></div>))}
+            {[{l:"Ciclo conoscenza",v:ciclo?"Ciclo "+ciclo:"\u2014",color:ciclo===CICLO_CORRENTE?"var(--a1)":undefined},{l:"Conosciuto il",v:fmt(p.conosciutoAt)},{l:"Follow-up",v:p.followUp?(od?"Scaduto \u00b7 ":dt?"Oggi \u00b7 ":"")+fmt(p.followUp):"Non impostato",color:od?"#f87171":dt?tono("#fbbf24"):undefined},...(p.dataNascita?[{l:"Età",v:eta(p.dataNascita)+" anni"}]:[])].map(({l,v,color:col})=>(<div key={l} style={box}><div style={lbl}>{l}</div><div style={{color:col||"var(--text)",fontWeight:700,fontSize:13}}>{v}</div></div>))}
             {p.telefono&&(
               <div style={box}>
                 <div style={lbl}> Telefono</div>
@@ -2184,7 +2131,6 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, o
               </div>
             )}
           </div>
-          {storico.length>0&&(<div style={{...box,marginBottom:9}}><div style={lbl}> Storico percorso</div><div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>{storico.map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:9}}><span style={{width:8,height:8,borderRadius:99,background:FASE_CLR[s.fase],flexShrink:0,boxShadow:"0 0 6px "+FASE_CLR[s.fase]+"70"}}/><span style={{fontSize:12.5,fontWeight:700,color:"var(--text)",minWidth:64}}>{FASE_LABEL[s.fase]}</span><input type="date" defaultValue={s.data} onBlur={e=>{if(e.target.value&&e.target.value!==s.data)onUpdateStoricoData(s.fase,e.target.value);}} style={{fontSize:11,padding:"2px 6px",width:"auto",minWidth:0,background:"var(--bg3)",border:"1px solid var(--border2)",borderRadius:6,color:"var(--muted)",cursor:"pointer"}}/><span style={{fontSize:10,color:"var(--muted)",marginLeft:"auto"}}>Ciclo {cicloOfDate(s.data)||"\u2014"}</span>{storico.length>1&&<button onClick={()=>onDeleteStorico(s.fase)} style={{background:"#ef444415",border:"1px solid #ef444430",borderRadius:6,color:"#f87171",cursor:"pointer",fontSize:11,fontWeight:800,padding:"2px 7px",marginLeft:4,lineHeight:1}}>x</button>}</div>))}</div></div>)}
           {p.note&&<div style={{...box,marginBottom:9}}><div style={lbl}> Note</div><p style={{color:"var(--text)",lineHeight:1.6,fontSize:13,marginTop:4}}>{p.note}</p></div>}
           {p.fase==="SUB"&&(
             <div style={{...box,marginBottom:9}}>
