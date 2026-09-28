@@ -301,7 +301,12 @@ export function Lista({ prospects, total, search, setSearch, fFase, setFFase, fF
         )}
       </div>
       {prospects.length===0
-        ?<div style={{textAlign:"center",padding:"4rem",color:"var(--border2)"}}><div style={{fontSize:44,marginBottom:12}}></div><p style={{fontSize:14,marginBottom:14}}>Nessun prospect trovato</p><button onClick={onAdd} style={{padding:"9px 20px",fontSize:13,fontWeight:800,background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:10,cursor:"pointer"}}>Aggiungi il primo</button></div>
+        ?<div style={{textAlign:"center",padding:"4rem",color:"var(--border2)"}}><div style={{fontSize:44,marginBottom:12}}></div>{total>0
+            /* ci sono prospect ma i filtri li nascondono tutti: dire "aggiungi il primo"
+               sarebbe falso e sembrerebbe una perdita di dati. Il filtro del ciclo e' attivo
+               di default, quindi e' il caso piu' probabile: si offre l'uscita con un clic. */
+            ?<><p style={{fontSize:14,marginBottom:14}}>Nessun prospect con questi filtri</p>{fCiclo&&<button onClick={()=>setFCiclo("")} style={{padding:"9px 20px",fontSize:13,fontWeight:800,background:"var(--bg4)",color:"var(--a2)",border:"1px solid var(--border2)",borderRadius:10,cursor:"pointer"}}>Mostra tutti i cicli</button>}</>
+            :<><p style={{fontSize:14,marginBottom:14}}>Nessun prospect trovato</p><button onClick={onAdd} style={{padding:"9px 20px",fontSize:13,fontWeight:800,background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:10,cursor:"pointer"}}>Aggiungi il primo</button></>}</div>
         :<div className="tbl-wrap" style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,overflowX:"auto"}}>
           {/* borderCollapse separate + borderSpacing verticale: e' quello che stacca
               le righe una dall'altra e permette angoli arrotondati e bordi colorati

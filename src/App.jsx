@@ -760,7 +760,10 @@ export default function App() {
   const [search, setSearch]       = useState("");
   const [fFase, setFFase]         = useState("");
   const [fFonte, setFFonte]       = useState("");
-  const [fCiclo, setFCiclo]       = useState("");
+  // Default: il ciclo in corso, non "tutti". Per vedere tutto si sceglie "Tutti i cicli"
+  // dal filtro (valore ""). Stringa e non numero perche' il <select> in Lista.jsx lavora
+  // con stringhe (e.target.value) e il confronto usa Number(fCiclo).
+  const [fCiclo, setFCiclo]       = useState(String(CICLO_CORRENTE));
   const [fCitta, setFCitta]       = useState("");
   const [fInteresse, setFInteresse] = useState("");
   const [fPercorso, setFPercorso] = useState(""); // "" | "in_percorso" | "non_in_percorso"
