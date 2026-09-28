@@ -41,7 +41,7 @@ export function isProspectAttivo(p) { return !p || p.fase !== "RIMBORSO"; }
 
 export const FASE_CLR = {
   INVITO:"#8b5cf6", FISSATO:"#a855f7", CONOSCITIVA:"#7c3aed", FUP1:"#2563eb", FUP2:"#3b82f6", PACK:"var(--a2)",
-  CLOSING:"#22d3ee", SUB:"#10b981",
+  get CLOSING() { return tono("#22d3ee"); }, SUB:"#10b981",
   // Da risentire e Da rifissare erano ambra e arancio: troppo vicini al giallo
   // dell'Invito nella griglia. Spostati su lilla e indaco, l'unico settore di
   // tinta ancora libero. NB: niente turchese o verde-azzurro qui — il verde e'
@@ -59,15 +59,16 @@ export const FASE_CLR = {
 // con l'alpha in esadecimale, e una CSS variable non si puo' concatenare.
 // Le fasi speciali riusano i colori di FASE_CLR (vedi coloreRiga sotto).
 export const FASE_RIGA_CLR = {
-  INVITO:"#eab308",
+  get INVITO() { return tono("#eab308"); },
   // I due verdi sono un vincolo di progetto (percorso = verde, Closing = verde piu'
   // scuro), quindi si separano sulla LUMINOSITA', non sulla tinta: menta chiaro
   // contro verde bosco. A bassa opacita' la differenza si appiattisce comunque —
   // e' la barra piena a sinistra della riga a renderla leggibile, per questo e'
   // spessa 5px e non 3.
-  FISSATO:"#86efac", CONOSCITIVA:"#86efac", FUP1:"#86efac", FUP2:"#86efac", PACK:"#86efac",
+  get FISSATO() { return tono("#86efac"); }, get CONOSCITIVA() { return tono("#86efac"); },
+  get FUP1() { return tono("#86efac"); }, get FUP2() { return tono("#86efac"); }, get PACK() { return tono("#86efac"); },
   CLOSING:"#15803d",
-  SUB:"#38bdf8",
+  get SUB() { return tono("#38bdf8"); },
 };
 // Opacita' dello sfondo riga e del bordo. Unici due punti da toccare per alzare
 // o abbassare l'intensita': "1c" e' circa 11%, "2b" circa 17%, "3d" circa 24%.
@@ -414,4 +415,99 @@ export function FrecceCronologia({ cronologia }) {
         style={stile(puoR)}>{freccia(true)}</button>
     </div>
   );
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// TEMI E ASPETTO (chiaro / scuro)
+// Spostati qui da App.jsx e Profilo.jsx, dove erano copiati identici: aggiungere la
+// versione chiara avrebbe raddoppiato la duplicazione, e alla prima modifica le due
+// copie sarebbero divergite. Due assi indipendenti, come su Mac e iPhone: il COLORE
+// d'accento (Blu, Verde...) e l'ASPETTO (chiaro o scuro), combinabili liberamente.
+//
+// Eccezione dichiarata alla regola "niente state" di questo file: applyTema scrive sul
+// documento (variabili CSS e attributo data-aspetto). E' lo stato GLOBALE della pagina,
+// come le variabili CSS stesse: non e' state React e non chiama la rete.
+// ══════════════════════════════════════════════════════════════
+
+// I temi scuri sono IDENTICI a prima: in modalita' scura non cambia nulla.
+// `a2Chiaro`: il colore d'accento dei testi (menu attivo, link, contatori) nella versione
+// chiara. Stessa tinta dell'--a2 scuro, scurita fino a contrasto 4.5:1 sul bianco perche'
+// si usa per testo piccolo. Calcolato, non scelto a occhio.
+export const TEMI = {
+  blu:   { label:"Blu",   preview:"linear-gradient(135deg,#1e40af,#0ea5e9)", vars:{"--bg":"#060b18","--bg2":"#080f1f","--bg3":"#0a1426","--bg4":"#0d1b33","--border":"#11203a","--border2":"#1e3a5f","--a1":"#2563eb","--a2":"#0ea5e9","--a1-10":"#2563eb1a","--a1-12":"#2563eb1f","--a1-13":"#2563eb21","--a1-18":"#2563eb2e","--a1-25":"#2563eb40","--a1-31":"#2563eb4f","--text":"#eff6ff","--muted":"#5278a8","--muted2":"#2a4060","--sidebar-active":"#0d1b33","--riga":"#0d1b3355","--sidebar-border":"#2563eb40"}, a2Chiaro:"#0b7eb2" },
+  verde: { label:"Verde", preview:"linear-gradient(135deg,#065f46,#10b981)", vars:{"--bg":"#030d08","--bg2":"#041208","--bg3":"#06180d","--bg4":"#082014","--border":"#0a2a14","--border2":"#134d28","--a1":"#059669","--a2":"#10b981","--a1-10":"#0596691a","--a1-12":"#0596691f","--a1-13":"#05966921","--a1-18":"#0596692e","--a1-25":"#05966940","--a1-31":"#0596694f","--text":"#ecfdf5","--muted":"#3d7a5a","--muted2":"#1a3d2a","--sidebar-active":"#082014","--riga":"#08201455","--sidebar-border":"#05966940"}, a2Chiaro:"#0c855d" },
+  viola: { label:"Viola", preview:"linear-gradient(135deg,#4c1d95,#a78bfa)", vars:{"--bg":"#06030f","--bg2":"#0a0518","--bg3":"#0f0820","--bg4":"#140b2a","--border":"#1a1035","--border2":"#2e1a55","--a1":"#7c3aed","--a2":"#a78bfa","--a1-10":"#7c3aed1a","--a1-12":"#7c3aed1f","--a1-13":"#7c3aed21","--a1-18":"#7c3aed2e","--a1-25":"#7c3aed40","--a1-31":"#7c3aed4f","--text":"#f5f3ff","--muted":"#6b5a9a","--muted2":"#2d1a55","--sidebar-active":"#140b2a","--riga":"#140b2a55","--sidebar-border":"#7c3aed40"}, a2Chiaro:"#7e55f8" },
+  rosa:  { label:"Rosa",  preview:"linear-gradient(135deg,#9d174d,#f472b6)", vars:{"--bg":"#0f0308","--bg2":"#180510","--bg3":"#200718","--bg4":"#2a0a20","--border":"#380d2a","--border2":"#5a1a42","--a1":"#db2777","--a2":"#f472b6","--a1-10":"#db27771a","--a1-12":"#db27771f","--a1-13":"#db277721","--a1-18":"#db27772e","--a1-25":"#db277740","--a1-31":"#db27774f","--text":"#fdf2f8","--muted":"#8a4a6b","--muted2":"#4a1530","--sidebar-active":"#2a0a20","--riga":"#2a0a2055","--sidebar-border":"#db277740"}, a2Chiaro:"#e2127e" },
+  oro:   { label:"Oro",   preview:"linear-gradient(135deg,#78350f,#fbbf24)", vars:{"--bg":"#080600","--bg2":"#0f0c00","--bg3":"#181200","--bg4":"#201800","--border":"#2a2000","--border2":"#3d3000","--a1":"#d97706","--a2":"#fbbf24","--a1-10":"#d977061a","--a1-12":"#d977061f","--a1-13":"#d9770621","--a1-18":"#d977062e","--a1-25":"#d9770640","--a1-31":"#d977064f","--text":"#fffbeb","--muted":"#7a6530","--muted2":"#3d3000","--sidebar-active":"#201800","--riga":"#20180055","--sidebar-border":"#d9770640"}, a2Chiaro:"#986e03" },
+};
+
+// Base neutra per l'aspetto chiaro, comune a tutti i colori d'accento (come Apple, che
+// non tinge lo sfondo col colore scelto). Grigi dal chiaro allo scuro per profondita'.
+const BASE_CHIARA = {
+  "--bg":"#f5f5f7", "--bg2":"#ffffff", "--bg3":"#f2f3f6", "--bg4":"#e9ebf0",
+  "--border":"#e2e5ea", "--border2":"#c9ced6",
+  "--text":"#1d1d1f", "--muted":"#6e6e73", "--muted2":"#aeaeb2",
+  "--riga":"#0f172a12",
+};
+
+function varsDelTema(temaKey, aspetto) {
+  const t = TEMI[temaKey] || TEMI.blu;
+  if (aspetto !== "chiaro") return t.vars;
+  const d = t.vars;
+  return {
+    ...BASE_CHIARA,
+    // --a1 resta quello scuro: e' il riempimento dei bottoni, con testo bianco sopra,
+    // e quel contrasto non dipende dallo sfondo della pagina
+    "--a1": d["--a1"], "--a2": t.a2Chiaro,
+    "--a1-10": d["--a1-10"], "--a1-12": d["--a1-12"], "--a1-13": d["--a1-13"],
+    "--a1-18": d["--a1-18"], "--a1-25": d["--a1-25"], "--a1-31": d["--a1-31"],
+    "--sidebar-active": d["--a1"] + "14", "--sidebar-border": d["--sidebar-border"],
+  };
+}
+
+// Segna l'aspetto sul documento. Separata da applyTema perche' App.jsx la chiama DURANTE
+// il render: i componenti figli, renderizzati subito dopo, leggono gia' l'aspetto giusto
+// in tono(). Se la si impostasse solo in un effetto (dopo il render), i colori delle fasi
+// resterebbero del tono sbagliato fino al render successivo.
+export function segnaAspetto(aspetto) {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.aspetto = aspetto === "chiaro" ? "chiaro" : "scuro";
+}
+
+export function applyTema(temaKey, aspetto) {
+  if (typeof document === "undefined") return;
+  const vars = varsDelTema(temaKey, aspetto);
+  const root = document.documentElement;
+  Object.entries(vars).forEach(([k, v]) => root.style.setProperty(k, v));
+  // color-scheme: senza, menu a tendina, calendario e barre di scorrimento NATIVE del
+  // browser non seguono il tema
+  root.style.colorScheme = aspetto === "chiaro" ? "light" : "dark";
+  segnaAspetto(aspetto);
+  document.body.style.background = vars["--bg"];
+}
+
+// Toni dei colori funzionali in aspetto CHIARO. Solo quelli che su fondo bianco
+// sparivano (contrasto sotto 3:1) E che si usano come testo o linea sottile sulla
+// pagina: stessa tinta e saturazione, luminosita' abbassata del minimo indispensabile
+// per arrivare a 3:1. I riempimenti con testo bianco sopra (toast, bottoni, nodi della
+// mappa) non stanno qui: il loro contrasto non dipende dallo sfondo della pagina.
+const TONI_CHIARI = {
+  "#86efac":"#16aa4c",
+  "#eab308":"#b98d06",
+  "#38bdf8":"#089ee1",
+  "#22d3ee":"#0ea1b8",
+  "#fbbf24":"#c08b04",
+  "#d8b4fe":"#b775fd",
+  "#a5b4fc":"#768dfa",
+  "#4ade80":"#1fa851",
+  "#cbd5e1":"#7d96b4"
+};
+
+// Il tono giusto per l'aspetto attivo. Legge l'attributo sul documento: nessuno state,
+// nessun import circolare, e il valore e' sempre quello appena applicato.
+export function tono(hex) {
+  if (typeof document === "undefined") return hex;
+  if (document.documentElement.dataset.aspetto !== "chiaro") return hex;
+  return TONI_CHIARI[(hex || "").toLowerCase()] || hex;
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from "recharts";
-import { Av, FrecceCronologia, azioneModifica, azioneCreazione, azioneCancellazione, campiCambiati, scegliCampi } from "../shared";
+import { Av, tono, FrecceCronologia, azioneModifica, azioneCreazione, azioneCancellazione, campiCambiati, scegliCampi } from "../shared";
 
 function fmtDate(d) {
   if (!d) return "\u2014";
@@ -22,8 +22,8 @@ function coloreTicket(p) {
   if (p.in_forse) return "#6b7280";
   const n = flagCount(p);
   if (n >= 3) return "#15803d";
-  if (n === 2) return "#86efac";
-  if (n === 1) return "#eab308";
+  if (n === 2) return tono("#86efac");
+  if (n === 1) return tono("#eab308");
   return null;
 }
 
@@ -121,7 +121,7 @@ function RigaTicket({ p, ownerName, squadraLabel, editabile, onOpen, onToggleFla
   // larga tinta di colore saturo diventa un banner di avviso, non un dato. La
   // sfumatura sta SOLO nella cella del nome — applicata a ogni <td> ripartirebbe
   // da capo in ognuna, a bande.
-  const cellStyle = { borderTop: "1px solid #0d1b3355", borderBottom: "1px solid #0d1b3355" };
+  const cellStyle = { borderTop: "1px solid var(--riga)", borderBottom: "1px solid var(--riga)" };
 
   return (
     <tr>
@@ -266,7 +266,7 @@ function PersonaModal({ persona, defaultStato, onSave, onClose, onDelete, auth, 
 function Leaderboard({ ranking }) {
   const top3 = ranking.slice(0, 3);
   const rest = ranking.slice(3, 5);
-  const medalColor = ["#fbbf24", "#cbd5e1", "#d97706"];
+  const medalColor = ["#fbbf24", tono("#cbd5e1"), "#d97706"];
   const medalLabel = ["\ud83e\udd47", "\ud83e\udd48", "\ud83e\udd49"];
   const order = [1, 0, 2]; // 2deg-1deg-3deg per il podio visivo
 

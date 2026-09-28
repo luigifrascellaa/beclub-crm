@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import L from "leaflet";
+import { tono } from "../shared";
 import "leaflet/dist/leaflet.css";
 
 const FASI_DASH = ["FUP1","FUP2","PACK","CLOSING","SUB"];
-const FASE_CLR = {INVITO:"#8b5cf6",FUP1:"var(--a1)",FUP2:"#3b82f6",PACK:"var(--a2)",CLOSING:"#22d3ee",SUB:"#10b981",FOLLOW_UP:"#f59e0b",NON_INT:"#6b7280",RIMBORSO:"#ef4444"};
+const FASE_CLR = {INVITO:"#8b5cf6",FUP1:"var(--a1)",FUP2:"#3b82f6",PACK:"var(--a2)",get CLOSING() { return tono("#22d3ee"); },SUB:"#10b981",FOLLOW_UP:"#f59e0b",NON_INT:"#6b7280",RIMBORSO:"#ef4444"};
 const FASE_LABEL = {INVITO:"Invito",FUP1:"FUP 1",FUP2:"FUP 2",PACK:"Pack",CLOSING:"Closing",SUB:"Iscritto",FOLLOW_UP:"Follow Up",NON_INT:"Non Int.",RIMBORSO:"Rimborso"};
 // Un prospect in fase RIMBORSO resta in lista ma va sempre escluso prima di teamStats/funnel.
 function isProspectAttivo(p){ return !p||p.fase!=="RIMBORSO"; }
@@ -364,14 +365,14 @@ function TreeCanvas({ memberId, memberNome, memberCognome, memberEmail, allMembe
             )}
             <div onClick={() => !n.isRoot && onSelect && onSelect(allMembers.find(m => m.id === n.id))}
               style={{
-                background: n.isRoot ? "linear-gradient(135deg,var(--a1),var(--a2))" : isSpento ? "#6b728012" : isClienteOnly ? "#4ade8016" : "var(--bg4)",
-                border: "2px solid " + (n.isRoot ? "var(--a1)" : isSpento ? "#6b728050" : isClienteOnly ? "#4ade8065" : "var(--border2)"),
+                background: n.isRoot ? "linear-gradient(135deg,var(--a1),var(--a2))" : isSpento ? "#6b728012" : isClienteOnly ? tono("#4ade80")+"16" : "var(--bg4)",
+                border: "2px solid " + (n.isRoot ? "var(--a1)" : isSpento ? "#6b728050" : isClienteOnly ? tono("#4ade80")+"65" : "var(--border2)"),
                 borderRadius: 12, padding: "10px 14px", textAlign: "center",
                 cursor: n.isRoot ? "default" : "pointer", width: NODE_W - 8,
                 boxShadow: n.isRoot ? "0 0 20px var(--a1-25)" : "none",
                 filter: isSpento ? "grayscale(1)" : "none",
               }}>
-              <div style={{ fontWeight: 800, fontSize: 12, color: n.isRoot ? "#fff" : isSpento ? "#6b7280" : isClienteOnly ? "#4ade80" : "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <div style={{ fontWeight: 800, fontSize: 12, color: n.isRoot ? "#fff" : isSpento ? "#6b7280" : isClienteOnly ? tono("#4ade80") : "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {n.nome || n.email} {n.cognome || ""}
               </div>
               {!n.isRoot && (
@@ -623,13 +624,13 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
           ))}
         </div>
         <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
-          <div style={{padding:"1rem 1.4rem",borderBottom:"1px solid #11203a",fontSize:13,fontWeight:800,color:"var(--text)"}}>Prospect di {selectedMember.nome||selectedMember.email}</div>
+          <div style={{padding:"1rem 1.4rem",borderBottom:"1px solid var(--border)",fontSize:13,fontWeight:800,color:"var(--text)"}}>Prospect di {selectedMember.nome||selectedMember.email}</div>
           {mP.length===0
             ?<div style={{padding:"3rem",textAlign:"center",color:"var(--border2)"}}>Nessun prospect ancora</div>
             :<table style={{width:"100%",borderCollapse:"collapse"}}>
-              <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Nome","Conosciuto","Fonte","Fase","Checklist"].map(h=>(<th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px"}}>{h}</th>))}</tr></thead>
+              <thead><tr style={{borderBottom:"1px solid var(--border)"}}>{["Nome","Conosciuto","Fonte","Fase","Checklist"].map(h=>(<th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px"}}>{h}</th>))}</tr></thead>
               <tbody>{mP.map(p=>(
-                <tr key={p.id} onClick={()=>onOpenProspect&&onOpenProspect({...p,_ownerName:(selectedMember.nome||selectedMember.email)+" "+(selectedMember.cognome||"")})} style={{borderBottom:"1px solid #0d1b3355",cursor:onOpenProspect?"pointer":"default"}} className="hrow">
+                <tr key={p.id} onClick={()=>onOpenProspect&&onOpenProspect({...p,_ownerName:(selectedMember.nome||selectedMember.email)+" "+(selectedMember.cognome||"")})} style={{borderBottom:"1px solid var(--riga)",cursor:onOpenProspect?"pointer":"default"}} className="hrow">
                   <td style={{padding:"11px 16px"}}><div style={{display:"flex",alignItems:"center",gap:9}}><Av n={p.nome} c={p.cognome} color={FASE_CLR[p.fase]}/><span style={{color:"var(--text)",fontWeight:700,fontSize:13}}>{p.nome} {p.cognome}</span></div></td>
                   <td style={{padding:"11px 16px",color:"var(--muted)",fontSize:12}}>{fmt(p.conosciutoAt)}</td>
                   <td style={{padding:"11px 16px",color:"var(--muted)",fontSize:12}}>{p.fonte}</td>
@@ -639,7 +640,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
                       {["kyc","pandadoc","click"].map(k=>{
                         const done=p.checklist?.[k];
                         const label=k==="pandadoc"?"PD":k.toUpperCase();
-                        return <span key={k} style={{fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:5,background:done?"#10b98120":"#1e3a5f20",color:done?"#10b981":"var(--muted)",border:"1px solid "+(done?"#10b98140":"var(--border2)")}}>{label}</span>;
+                        return <span key={k} style={{fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:5,background:done?"#10b98120":"var(--bg4)",color:done?"#10b981":"var(--muted)",border:"1px solid "+(done?"#10b98140":"var(--border2)")}}>{label}</span>;
                       })}
                     </div>
                   </td>
@@ -843,7 +844,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
           )}
 
           <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
-            <div style={{padding:"1rem 1.4rem",borderBottom:"1px solid #11203a",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+            <div style={{padding:"1rem 1.4rem",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <div style={{fontSize:13,fontWeight:800,color:"var(--text)"}}>Membri</div>
                 <button onClick={()=>setShowAddModal(true)} style={{width:26,height:26,borderRadius:"50%",background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",cursor:"pointer",fontWeight:900,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 10px #2563eb50"}}>+</button>
@@ -860,7 +861,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
             {downline.length===0
               ?<div style={{padding:"3rem",textAlign:"center",color:"var(--border2)"}}><div style={{fontSize:36,marginBottom:12}}>{"\u25c8"}</div><p style={{fontSize:14,marginBottom:8}}>Nessun membro ancora</p><p style={{fontSize:12,color:"var(--border2)"}}>Condividi il tuo link referral</p></div>
               :<table style={{width:"100%",borderCollapse:"collapse"}}>
-                <thead><tr style={{borderBottom:"1px solid #11203a"}}>{["Membro","Squadra","Prospect","Iscritti","Conv%","BV",...(isAdminLeader(auth.userId)?["Leader"]:[]),...(auth?.profile?.is_leader?["Marketer"]:[]),"Stato","Azione",""].map(h=>(<th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
+                <thead><tr style={{borderBottom:"1px solid var(--border)"}}>{["Membro","Squadra","Prospect","Iscritti","Conv%","BV",...(isAdminLeader(auth.userId)?["Leader"]:[]),...(auth?.profile?.is_leader?["Marketer"]:[]),"Stato","Azione",""].map(h=>(<th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px",whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
                 <tbody>{filteredMembers.map(m=>{
                   const mP=getMemberProspects(m.id);
                   const ms=teamStats(mP);
@@ -868,7 +869,7 @@ export function TeamView({auth,downline,dlProspects,onAssignTeam,onAddManual,pos
                   const teamColor=myTeam==="sinistra"?"var(--a1)":myTeam==="destra"?"#10b981":"#6b7280";
                   const isMyDirect=m.positioned_under===auth.userId;
                   return(
-                    <tr key={m.id} style={{borderBottom:"1px solid #0d1b3355"}}>
+                    <tr key={m.id} style={{borderBottom:"1px solid var(--riga)"}}>
                       <td style={{padding:"12px 16px"}}><div style={{display:"flex",alignItems:"center",gap:10}}><Av n={m.nome||m.email} c={m.cognome} color={teamColor}/><div>
                         <div style={{color:"var(--text)",fontWeight:700,fontSize:13}}>{m.nome||m.email} {m.cognome||""}</div>
                         {m.citta&&<div style={{color:"var(--muted)",fontSize:11}}>{m.citta}</div>}

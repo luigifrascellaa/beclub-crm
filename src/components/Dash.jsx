@@ -8,6 +8,7 @@ import { ConsigliCard } from "./Mentore";
 import {
   Av, CICLI, CICLO_CORRENTE, CICLO_NUMS, FASE_CLR, FASE_LABEL,
   bvOfPacchetto, cicloLabel, fmt, isOver,
+  tono,
 } from "../shared";
 
 export function CicloCountdown({ ciclo }) {
@@ -158,7 +159,7 @@ export function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, cdChiusi, cdForzaCh
               })}
             </div>
           }
-          <div style={{display:"flex",gap:10,marginTop:16,paddingTop:14,borderTop:"1px dashed #11203a"}}>
+          <div style={{display:"flex",gap:10,marginTop:16,paddingTop:14,borderTop:"1px dashed var(--border)"}}>
             {[{f:"DA_RISENTIRE",n:cd.filter(p=>p.fase==="DA_RISENTIRE").length},{f:"DA_RIFISSARE",n:cd.filter(p=>p.fase==="DA_RIFISSARE").length},{f:"NON_INT",n:cdNI.length},{f:"NON_PIACE",n:cd.filter(p=>p.fase==="NON_PIACE").length}].map(({f,n})=>(
               <div key={f} style={{flex:1,background:FASE_CLR[f]+"12",border:"1px solid "+FASE_CLR[f]+"28",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:8,height:8,borderRadius:99,background:FASE_CLR[f],flexShrink:0}} />
@@ -171,7 +172,7 @@ export function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, cdChiusi, cdForzaCh
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
             {cdFU.length>0&&(
               <div style={{background:"var(--bg2)",border:"1px solid #f59e0b28",borderRadius:14,padding:"1.2rem",flex:1}}>
-                <div style={{fontSize:10,fontWeight:700,color:"#fbbf24",textTransform:"uppercase",letterSpacing:1.2,marginBottom:12}}> Da ricontattare</div>
+                <div style={{fontSize:10,fontWeight:700,color:tono("#fbbf24"),textTransform:"uppercase",letterSpacing:1.2,marginBottom:12}}> Da ricontattare</div>
                 <div style={{display:"flex",flexDirection:"column",gap:7,maxHeight:170,overflowY:"auto"}}>
                   {cdFU.map(p=>(
                     <div key={p.id} className="hrow" onClick={()=>onOpen(p)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#f59e0b09",border:"1px solid #f59e0b1e",borderRadius:9,padding:"8px 11px",cursor:"pointer"}}>
@@ -179,7 +180,7 @@ export function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, cdChiusi, cdForzaCh
                         <Av n={p.nome} c={p.cognome} color={FASE_CLR[p.fase]||FASE_CLR.DA_RISENTIRE} />
                         <span style={{fontWeight:700,color:"var(--text)",fontSize:12}}>{p.nome} {p.cognome}</span>
                       </div>
-                      <span style={{fontSize:10,color:"#fbbf24"}}>{fmt(p.followUp)}</span>
+                      <span style={{fontSize:10,color:tono("#fbbf24")}}>{fmt(p.followUp)}</span>
                     </div>
                   ))}
                 </div>
@@ -195,7 +196,7 @@ export function Dash({ cd, cdSub, cdAct, cdFU, cdNI, cdConv, cdChiusi, cdForzaCh
                         <Av n={p.nome} c={p.cognome} color={FASE_CLR[p.fase]} />
                         <div>
                           <div style={{fontWeight:700,color:"var(--text)",fontSize:12}}>{p.nome} {p.cognome}</div>
-                          <div style={{fontSize:10,color:isOver(p.followUp)?"#f87171":"#fbbf24",marginTop:1,fontWeight:600}}>{isOver(p.followUp)?" Scaduto":" Oggi"}</div>
+                          <div style={{fontSize:10,color:isOver(p.followUp)?"#f87171":tono("#fbbf24"),marginTop:1,fontWeight:600}}>{isOver(p.followUp)?" Scaduto":" Oggi"}</div>
                         </div>
                       </div>
                       <span style={{display:"inline-flex",alignItems:"center",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,color:"#fff",background:FASE_CLR[p.fase]}}>{FASE_LABEL[p.fase]}</span>

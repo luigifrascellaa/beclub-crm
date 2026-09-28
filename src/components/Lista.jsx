@@ -181,7 +181,7 @@ function RigaGriglia({ p, listaMode, editabile, onOpen, onToggleFase, onSaveNote
   // e la zona delle caselle resta neutra cosi' le spunte si leggono pulite.
   // La sfumatura sta SOLO nella cella del nome: un gradiente applicato a ogni <td>
   // ripartirebbe da capo in ognuna, a bande.
-  const cellStyle = { borderTop: "1px solid #0d1b3355", borderBottom: "1px solid #0d1b3355" };
+  const cellStyle = { borderTop: "1px solid var(--riga)", borderBottom: "1px solid var(--riga)" };
 
   return (
     <tr>

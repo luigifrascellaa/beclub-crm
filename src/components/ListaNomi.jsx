@@ -398,11 +398,11 @@ export function ListaNomiView({ auth, onInvitaProspect, cronologia }) {
               {/* Da invitare */}
               {daInvitare.length>0&&(
                 <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:14,overflow:"hidden",marginBottom:16}}>
-                  <div style={{padding:"1rem 1.4rem",borderBottom:"1px solid #11203a",fontSize:13,fontWeight:800,color:"var(--text)"}}>
+                  <div style={{padding:"1rem 1.4rem",borderBottom:"1px solid var(--border)",fontSize:13,fontWeight:800,color:"var(--text)"}}>
                     Da invitare <span style={{fontSize:11,color:"var(--muted)",fontWeight:400,marginLeft:8}}>{daInvitare.length} persone</span>
                   </div>
                   <table style={{width:"100%",borderCollapse:"collapse"}}>
-                    <thead><tr style={{borderBottom:"1px solid #11203a"}}>
+                    <thead><tr style={{borderBottom:"1px solid var(--border)"}}>
                       {["Nome","Citta","Telefono","Instagram","Temp.","Note","Profilo",""].map(h=>(
                         <th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px"}}>{h}</th>
                       ))}
@@ -410,7 +410,7 @@ export function ListaNomiView({ auth, onInvitaProspect, cronologia }) {
                     <tbody>{daInvitare.map(p=>{
                       const jung = (() => { const j=p.profilazione?.jung; if(!j)return[]; if(Array.isArray(j))return JUNG.filter(x=>j.includes(x.key)); return JUNG.filter(x=>x.key===j); })();
                       return (
-                        <tr key={p.id} onClick={()=>{setSel(p);setModal("edit");}} style={{borderBottom:"1px solid #0d1b3355",cursor:"pointer"}} className="hrow">
+                        <tr key={p.id} onClick={()=>{setSel(p);setModal("edit");}} style={{borderBottom:"1px solid var(--riga)",cursor:"pointer"}} className="hrow">
                           <td style={{padding:"11px 16px"}}><div style={{display:"flex",alignItems:"center",gap:9}}><Av n={p.nome} c={p.cognome}/><span style={{color:"var(--text)",fontWeight:700,fontSize:13}}>{p.nome} {p.cognome}</span></div></td>
                           <td style={{padding:"11px 16px",color:"var(--muted)",fontSize:12}}>{p.citta||"\u2014"}</td>
                           <td style={{padding:"11px 16px",fontSize:12}}>{p.telefono?<a href={"tel:"+p.telefono} onClick={e=>e.stopPropagation()} style={{color:"var(--a2)",textDecoration:"none"}}>{p.telefono}</a>:"\u2014"}</td>
@@ -429,17 +429,17 @@ export function ListaNomiView({ auth, onInvitaProspect, cronologia }) {
               {/* Gia invitati */}
               {invitati.length>0&&(
                 <div style={{background:"var(--bg2)",border:"1px solid #10b98130",borderRadius:14,overflow:"hidden"}}>
-                  <div style={{padding:"1rem 1.4rem",borderBottom:"1px solid #11203a",fontSize:13,fontWeight:800,color:"#10b981"}}>
+                  <div style={{padding:"1rem 1.4rem",borderBottom:"1px solid var(--border)",fontSize:13,fontWeight:800,color:"#10b981"}}>
                     Gia invitati <span style={{fontSize:11,color:"var(--muted)",fontWeight:400,marginLeft:8}}>{invitati.length} persone</span>
                   </div>
                   <table style={{width:"100%",borderCollapse:"collapse"}}>
-                    <thead><tr style={{borderBottom:"1px solid #11203a"}}>
+                    <thead><tr style={{borderBottom:"1px solid var(--border)"}}>
                       {["Nome","Citta","Instagram","Note",""].map(h=>(
                         <th key={h} style={{textAlign:"left",color:"var(--muted)",fontWeight:700,fontSize:10,textTransform:"uppercase",padding:"11px 16px"}}>{h}</th>
                       ))}
                     </tr></thead>
                     <tbody>{invitati.map(p=>(
-                      <tr key={p.id} onClick={()=>{setSel(p);setModal("edit");}} style={{borderBottom:"1px solid #0d1b3355",cursor:"pointer",opacity:0.6}} className="hrow">
+                      <tr key={p.id} onClick={()=>{setSel(p);setModal("edit");}} style={{borderBottom:"1px solid var(--riga)",cursor:"pointer",opacity:0.6}} className="hrow">
                         <td style={{padding:"11px 16px"}}><div style={{display:"flex",alignItems:"center",gap:9}}><Av n={p.nome} c={p.cognome}/><span style={{color:"var(--text)",fontWeight:700,fontSize:13}}>{p.nome} {p.cognome}</span></div></td>
                         <td style={{padding:"11px 16px",color:"var(--muted)",fontSize:12}}>{p.citta||"\u2014"}</td>
                         <td style={{padding:"11px 16px",fontSize:12}}>{p.instagram?<a href={"https://instagram.com/"+p.instagram.replace("@","")} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{color:"#c084fc",textDecoration:"none"}}>{p.instagram.startsWith("@")?p.instagram:"@"+p.instagram}</a>:"\u2014"}</td>
