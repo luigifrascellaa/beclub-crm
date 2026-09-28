@@ -48,7 +48,7 @@ export const FASE_CLR = {
   // riservato al percorso e al Closing, e un turchese ci finisce dentro.
   // Restano cosi' distinti anche dal gruppo "chiuso male" (Non int. grigio,
   // Non mi piace rosa, Rimborso rosso), tutto su toni caldi e neutri.
-  DA_RISENTIRE:"#c084fc", DA_RIFISSARE:"#6366f1", NON_INT:"#6b7280", NON_PIACE:"#ec4899", RIMBORSO:"#ef4444",
+  DA_RISENTIRE:"#c084fc", DA_RIFISSARE:"#6366f1", NON_INT:"#6b7280", NON_PIACE:"#6b7280", RIMBORSO:"#ef4444",
 };
 // Colore di sfondo della riga nella griglia prospect, per fase corrente.
 // NON e' FASE_CLR: quelli restano i colori delle caselle e dei grafici, e formano
