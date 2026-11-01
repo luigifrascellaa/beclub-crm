@@ -136,6 +136,10 @@ const sbDeleteEventoPersona = (tok, id)     => sbFetch("/rest/v1/evento_persone?
 // Lettura di una sola riga: la usa la cronologia per verificare che nessun altro l'abbia toccata
 const sbGetEventoPersona    = (tok, id)     => sbFetch("/rest/v1/evento_persone?select=*&id=eq."+id, { _token:tok }).then(r => (r && r[0]) || null);
 const sbGetProspect         = (tok, id)     => sbFetch("/rest/v1/prospects?select=*&id=eq."+id, { _token:tok }).then(r => (r && r[0]) || null);
+// Lista Nomi: servono qui per "Rimetti in Lista Nomi", il flusso inverso di invitaProspect
+const sbNomiInvitati        = (tok, uid)    => sbFetch("/rest/v1/lista_nomi?select=*&user_id=eq."+uid+"&invitato=eq.true", { _token:tok });
+const sbUpdateNomeLista     = (tok, id, row) => sbFetch("/rest/v1/lista_nomi?id=eq."+id, { method:"PATCH", _token:tok, body:JSON.stringify(row) });
+const sbGetNomeLista        = (tok, id)     => sbFetch("/rest/v1/lista_nomi?select=*&id=eq."+id, { _token:tok }).then(r => (r && r[0]) || null);
 
 
 
@@ -781,6 +785,9 @@ export default function App() {
   const [dashMode, setDashMode]   = useState("personale");
   const [appMode, setAppMode] = useState("marketer"); // "marketer" | "cliente"
   const [listaMode, setListaMode] = useState("personale");
+  // Sale quando "Rimetti in Lista Nomi" (o il suo annulla/ripeti) cambia lista_nomi da fuori
+  // ListaNomiView: usato come key per farla ricaricare, altrimenti mostrerebbe dati vecchi.
+  const [nomiRev, setNomiRev] = useState(0);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false); // solo mobile: sidebar come drawer scorrevole
 
   // Pila unica delle modifiche. DEVE stare prima del `return` anticipato del login:
@@ -1176,6 +1183,76 @@ export default function App() {
     try {
       await creaProspect(np, auth.userId, "Prospect da Lista Nomi: " + nomeProspect(np));
       showToast((np.nome||"")+" aggiunto ai prospect");
+    } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
+  }
+
+  // ── Rimetti in Lista Nomi: il flusso inverso di invitaProspect ───────────────
+  // Nessun campo collega un prospect al nome da cui e' nato, quindi il legame si
+  // ricostruisce: fonte "Lista Nomi" + stesso nome e cognome tra i nomi GIA' INVITATI di
+  // chi sta agendo. Se non trova un riscontro non tocca niente.
+  // Solo finche' il prospect e' ancora in INVITO e mai avanzato: oltre quel punto e' un
+  // contatto vero e cancellarlo farebbe perdere storico e numeri. Solo il proprietario:
+  // un leader che apre un prospect della downline non lo sposta nella propria lista
+  // (e la policy RLS di lista_nomi non gli permetterebbe comunque di toccare i nomi altrui).
+  // NB: e' un cancello di comodita' lato UI, non una barriera di sicurezza.
+  const normNome = s => (s||"").trim().toLowerCase().replace(/\s+/g," ");
+  function puoRimettereInLista(p) {
+    if (!p) return false;
+    if (p._userId && p._userId !== auth.userId) return false;
+    if (p.fonte !== "Lista Nomi" || p.fase !== "INVITO" || p.convertedProfileId) return false;
+    return (p.storico||[]).every(s => s.fase === "INVITO");
+  }
+
+  async function rimettiInListaNomi(p) {
+    if (!puoRimettereInLista(p)) return;
+    if (!window.confirm("Rimettere "+nomeProspect(p)+" in Lista Nomi?\n\nIl prospect viene eliminato dai Prospect e il nome torna tra i \"Da invitare\". Puoi annullare con le frecce in alto.")) return;
+    try {
+      const invitati = (await sbNomiInvitati(auth.token, auth.userId)) || [];
+      let cand = invitati.filter(n => normNome(n.nome) === normNome(p.nome) && normNome(n.cognome) === normNome(p.cognome));
+      // omonimi: se telefono o instagram coincidono si restringe; altrimenti si prende il primo
+      if (cand.length > 1) {
+        const stretti = cand.filter(n => (p.telefono && n.telefono === p.telefono) || (p.instagram && n.instagram === p.instagram));
+        if (stretti.length) cand = stretti;
+      }
+      if (!cand.length) { showToast("Non trovo "+nomeProspect(p)+" tra i gia invitati della tua Lista Nomi: non ho toccato niente","#ef4444"); return; }
+      const idNome = cand[0].id, idP = p.id;
+      // Istantanea GREZZA del prospect PRIMA di toccare qualsiasi cosa: senza, l'annulla non
+      // potrebbe ripristinarlo identico (proprietario e created_at compresi). Se manca, ci si
+      // ferma: meglio non fare nulla che fare una cosa non annullabile a meta'.
+      const riga = await sbGetProspect(auth.token, idP);
+      if (!riga) throw new Error("non riesco a leggere il prospect, non ho toccato niente");
+      const etichetta = "Rimesso in Lista Nomi: " + nomeProspect(p);
+      // Due scritture, UN gesto: raggruppate nella cronologia, si annullano insieme o per niente.
+      await cronologia.gruppo(etichetta, async () => {
+        // Prima la scrittura non distruttiva (nome di nuovo "da invitare"), poi la cancellazione:
+        // se la seconda fallisce si torna indietro sulla prima e non resta nulla a meta'.
+        const r = await sbUpdateNomeLista(auth.token, idNome, { invitato:false });
+        if (Array.isArray(r) && r.length === 0) throw new Error("non sono riuscito ad aggiornare il nome in Lista Nomi");
+        try {
+          const d = await sbDelete(auth.token, idP);
+          if (Array.isArray(d) && d.length === 0) throw new Error("non sono riuscito a eliminare il prospect");
+        } catch(e) {
+          try { await sbUpdateNomeLista(auth.token, idNome, { invitato:true }); } catch(_) {}
+          throw e;
+        }
+        rimuoviProspectLocale(idP);
+        // Ordine di registrazione = [nome, prospect]: l'annulla va al contrario, quindi prima
+        // rimette il prospect e poi segna il nome come invitato. Se si ferma in mezzo resta un
+        // nome "da invitare" con il prospect gia presente (innocuo), mai un invitato senza prospect.
+        cronologia.registra(azioneModifica({
+          etichetta, leggi: () => sbGetNomeLista(cronologia.token(), idNome),
+          scrivi: async v => { await sbUpdateNomeLista(cronologia.token(), idNome, v); setNomiRev(n => n + 1); },
+          prima: { invitato:true }, dopo: { invitato:false },
+        }));
+        cronologia.registra(azioneCancellazione({
+          etichetta, leggi: () => sbGetProspect(cronologia.token(), idP),
+          cancella: async () => { await sbDelete(cronologia.token(), idP); rimuoviProspectLocale(idP); },
+          reinserisci: async rr => { await sbInsert(cronologia.token(), rr); aggiungiProspectLocale(rr); },
+          riga,
+        }));
+      });
+      setNomiRev(n => n + 1);
+      showToast(nomeProspect(p)+" rimesso in Lista Nomi");
     } catch(e) { showToast("Errore: "+e.message,"#ef4444"); }
   }
 
@@ -1655,7 +1732,7 @@ export default function App() {
             {view==="lista" && <Lista prospects={listaDataSorted} total={listaMode==="team"?teamProspects.length:data.length} search={search} setSearch={setSearch} fFase={fFase} setFFase={setFFase} fFonte={fFonte} setFFonte={setFFonte} fCiclo={fCiclo} setFCiclo={setFCiclo} fCitta={fCitta} setFCitta={setFCitta} fInteresse={fInteresse} setFInteresse={setFInteresse} fPercorso={fPercorso} setFPercorso={setFPercorso} fMembro={fMembro} setFMembro={setFMembro} fSquadra={fSquadra} setFSquadra={setFSquadra} sortBy={sortBy} setSortBy={setSortBy} downline={downline} auth={auth} onOpen={openDetail} onAdd={openAdd} onToggleFase={toggleFaseGrid} onSaveNote={salvaNoteGrid} cronologia={cronologia} listaMode={listaMode} setListaMode={m=>{setListaMode(m);if(m==="personale"){setFMembro("");setFSquadra("");}}} hasTeam={dlProspects.length>0} />}
             {view==="stats"   && <Statistiche data={data} dlProspects={dlProspectsAttivi} auth={auth} allProfiles={allProfiles} positions={positions} />}
             {view==="team"    && <TeamView auth={auth} downline={downline} dlProspects={dlProspects} onAssignTeam={assignTeam} onAddManual={addDownlineManually} positions={positions} onOpenProspect={openDetail} onPositionInTree={positionInTree} onToggleLeader={toggleLeader} onToggleMarketer={toggleMarketerUnlocked} onSetStatoMembro={setStatoMembro} onRimborsaMembro={rimborsaMembro} />}
-            {view==="nomi"    && <ListaNomiView auth={auth} onInvitaProspect={invitaProspect} cronologia={cronologia} />}
+            {view==="nomi"    && <ListaNomiView key={nomiRev} auth={auth} onInvitaProspect={invitaProspect} cronologia={cronologia} />}
             {view==="eventi"  && <EventiView auth={auth} allProfiles={allProfiles} downline={downline} positions={positions} showToast={showToast}
               sbListEventi={sbListEventi}
               sbListEventoPersone={sbListEventoPersone} sbInsertEventoPersona={sbInsertEventoPersona}
@@ -1696,7 +1773,7 @@ export default function App() {
         <div onClick={closeModal} style={{position:"fixed",inset:0,background:"#00000090",backdropFilter:"blur(8px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16,animation:"fadeIn .2s"}}>
           <div className={"pop"} onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520,maxHeight:"90vh",overflowY:"auto",borderRadius:"16px"}}>
             {modal==="detail"
-              ? <DetailModal p={sel} onEdit={()=>{setForm({...sel});setModal("edit");}} onAdvance={()=>advanceFase(sel)} onFollowUp={()=>moveFase(sel,"DA_RISENTIRE")} onNonInt={()=>moveFase(sel,"NON_INT")} onNonPiace={()=>moveFase(sel,"NON_PIACE")} onDaRifissare={()=>moveFase(sel,"DA_RIFISSARE")} onRiattiva={()=>moveFase(sel,"RIATTIVA")} onClose={closeModal} onUpdateProfilo={pr=>updateProfilo(sel.id,pr)} onUpdateChecklist={cl=>updateChecklist(sel.id,cl)} downline={downline} onLinkProfilo={linkProfilo} />
+              ? <DetailModal p={sel} onEdit={()=>{setForm({...sel});setModal("edit");}} onAdvance={()=>advanceFase(sel)} onFollowUp={()=>moveFase(sel,"DA_RISENTIRE")} onNonInt={()=>moveFase(sel,"NON_INT")} onNonPiace={()=>moveFase(sel,"NON_PIACE")} onDaRifissare={()=>moveFase(sel,"DA_RIFISSARE")} onRiattiva={()=>moveFase(sel,"RIATTIVA")} onRimettiInLista={puoRimettereInLista(sel)?()=>rimettiInListaNomi(sel):null} onClose={closeModal} onUpdateProfilo={pr=>updateProfilo(sel.id,pr)} onUpdateChecklist={cl=>updateChecklist(sel.id,cl)} downline={downline} onLinkProfilo={linkProfilo} />
               : <FormModal form={form} setForm={setForm} onSave={saveForm} onClose={closeModal} onDelete={modal==="edit"?()=>deleteProp(form.id):null} isEdit={modal==="edit"} auth={auth} downline={downline} />
             }
           </div>
@@ -2051,7 +2128,7 @@ function ProfilazioneTab({ p, onUpdateProfilo }) {
 }
 
 //  DETAIL MODAL 
-function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, onDaRifissare, onRiattiva, onClose, onUpdateProfilo, onUpdateChecklist, downline, onLinkProfilo }) {
+function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, onDaRifissare, onRiattiva, onRimettiInLista, onClose, onUpdateProfilo, onUpdateChecklist, downline, onLinkProfilo }) {
   const [activeTab,setActiveTab]=useState("dettagli");
   const clr=FASE_CLR[p.fase];const ci=FASI_FUNNEL.indexOf(p.fase);const isSpeciale=FASI_SPECIALI.includes(p.fase);
   const od=isOver(p.followUp);const dt=isToday(p.followUp);const ciclo=cicloOfDate(p.conosciutoAt);
@@ -2156,6 +2233,7 @@ function DetailModal({ p, onEdit, onAdvance, onFollowUp, onNonInt, onNonPiace, o
             {!isSpeciale&&ci<FASI_FUNNEL.length-1&&<button onClick={onAdvance} style={{padding:"9px 16px",background:"linear-gradient(135deg,"+FASE_CLR[FASI_FUNNEL[ci+1]]+","+FASE_CLR[FASI_FUNNEL[ci+1]]+"bb)",color:"#fff",border:"none",borderRadius:9,cursor:"pointer",fontWeight:800,fontSize:12}}>Avanza → {FASE_LABEL[FASI_FUNNEL[ci+1]]}</button>}
             {isSpeciale&&<button onClick={onRiattiva} style={{padding:"9px 16px",background:"linear-gradient(135deg,var(--a1),var(--a2))",color:"#fff",border:"none",borderRadius:9,cursor:"pointer",fontWeight:800,fontSize:12}}>↩ Riattiva nel Funnel</button>}
             <button onClick={onEdit} style={{padding:"9px 16px",background:"var(--bg4)",color:"#7da8d8",border:"1px solid var(--border2)",borderRadius:9,cursor:"pointer",fontWeight:600,fontSize:12}}> Modifica</button>
+            {onRimettiInLista&&<button onClick={onRimettiInLista} title="Il prospect torna tra i Da invitare della Lista Nomi" style={{padding:"9px 16px",background:"var(--bg4)",color:"var(--muted)",border:"1px solid var(--border2)",borderRadius:9,cursor:"pointer",fontWeight:600,fontSize:12}}>↩ Rimetti in Lista Nomi</button>}
           </div>
           {!isSpeciale&&(<div style={{borderTop:"1px solid var(--bg4)",marginTop:13,paddingTop:13,display:"flex",gap:9,flexWrap:"wrap"}}><div style={{fontSize:10,color:"var(--border2)",width:"100%",fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:2}}>Stato speciale</div>{p.fase!=="DA_RISENTIRE"&&<button onClick={onFollowUp} style={{padding:"8px 13px",background:"#c084fc16",color:tono("#d8b4fe"),border:"1px solid #c084fc38",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Da risentire</button>}{p.fase!=="DA_RIFISSARE"&&<button onClick={onDaRifissare} style={{padding:"8px 13px",background:"#6366f116",color:tono("#a5b4fc"),border:"1px solid #6366f138",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Da rifissare</button>}{p.fase!=="NON_INT"&&<button onClick={onNonInt} style={{padding:"8px 13px",background:"#ef444414",color:"#f87171",border:"1px solid #ef444436",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Non interessato</button>}{p.fase!=="NON_PIACE"&&<button onClick={onNonPiace} style={{padding:"8px 13px",background:"#6b728018",color:"#6b7280",border:"1px solid #6b728038",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}> Non mi piace</button>}</div>)}
         </>
