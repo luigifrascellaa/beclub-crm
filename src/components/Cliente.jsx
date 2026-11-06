@@ -27,29 +27,24 @@ const FASI_ONBOARDING = [
     links: [
       { label: "Profili da seguire", url: "https://linktr.ee/profilidaseguire" },
       { label: "Applicazioni da scaricare", url: "https://linktr.ee/applicazionidascaricare" },
+      // PDF in public/ (servito da Vercel alla radice del sito). Versione compressa per lo schermo.
+      { label: "THE MAP", url: "/the-map.pdf" },
     ],
   },
   {
     n: 2,
     titolo: "Fase 2",
     links: [
-      { label: "WES Stocks Base", url: "https://wowpowers.com/it/path/f373ccd8-44de-4c8e-bccc-c8cf094d45ae" },
-      { label: "WES Stocks Intermedio", url: "https://wowpowers.com/it/catalog/paths/a9779909-3dbe-4880-ac2d-75b9f4c42068" },
+      { label: "PERCORSO AZIONARIO BASE E INTERMEDIO", url: "https://wowpowers.com/it/path/fa10a5df-8c58-4407-a067-62a6a72be353" },
+      { label: "LIVE ENRICO", url: "https://wowpowers.com/it/stream-player/enrico/livestream/66107c76-302e-4d66-8c6a-4ce778b994bf?reference=TOP_EDUCATORS" },
     ],
   },
   {
     n: 3,
     titolo: "Fase 3",
     links: [
-      { label: "LIVE Enrico", url: "https://wowpowers.com/it/stream-player/enrico/livestream/66107c76-302e-4d66-8c6a-4ce778b994bf?reference=TOP_EDUCATORS" },
-      { label: "WES Stocks Avanzato", url: "https://wowpowers.com/it/path/73d9a573-2465-4e4a-bdd8-2607d5d08958" },
-    ],
-  },
-  {
-    n: 4,
-    titolo: "Fase 4",
-    links: [
       { label: "Psicologia, basi e PAC - Click", url: "https://www.myclick.space/c/be-servizi-ita/sections/1099195/lessons/4189638" },
+      { label: "PERCORSO AZIONARIO AVANZATO", url: "https://wowpowers.com/it/path/fa10a5df-8c58-4407-a067-62a6a72be353" },
     ],
   },
 ];
