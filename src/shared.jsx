@@ -28,7 +28,9 @@ export function bvOfPacchetto(key, bvCustom) {
 // storico e non vanno riempiti a posteriori: la colonna si popola in avanti.
 export const FASI_FUNNEL   = ["INVITO","FISSATO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
 export const FASI_DASH     = ["FISSATO","CONOSCITIVA","FUP1","FUP2","PACK","CLOSING","SUB"];
-export const FASI_SPECIALI = ["DA_RISENTIRE","DA_RIFISSARE","NON_INT","NON_PIACE","RIMBORSO"];
+// L'ORDINE conta: l'ordinamento "per fase" della lista Prospect e i menu a tendina seguono
+// questa sequenza. Da rifissare viene prima di Da risentire.
+export const FASI_SPECIALI = ["DA_RIFISSARE","DA_RISENTIRE","NON_INT","NON_PIACE","RIMBORSO"];
 export const FASI          = [...FASI_FUNNEL, ...FASI_SPECIALI];
 export const FONTI         = ["Instagram","TikTok","Offline","Referenza","Lista Nomi","Modulo"];
 export const FONTE_ICO     = { Instagram:"", TikTok:"", Offline:"", Referenza:"", "Lista Nomi":"", Modulo:"" };
